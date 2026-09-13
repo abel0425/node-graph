@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>节点关系图 · 多人协作（密码 + 标签 + 缩放）</title>
+<title>节点关系图 · 多人协作</title>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -126,7 +126,6 @@
   }
   #readonlyBadge.show { display: block; }
 
-  /* 节点编辑面板 */
   #nodeEditor {
     position: fixed; z-index: 40;
     top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -222,17 +221,13 @@
     <button id="btnDrag" class="active" disabled>✋ 拖动</button>
     <button id="btnConnect" disabled>🔗 连线</button>
   </div>
+
   <div class="row">
-    <button id="btnClear" disabled>清除连线</button>
     <button id="btnFit">适应视图</button>
+    <button id="btnZoomOut" title="缩小">➖</button>
+    <button id="btnZoomIn" title="放大">➕</button>
   </div>
-  <div class="row">
-    <button id="btnZoomOut" title="缩小">➖ 缩小</button>
-    <button id="btnZoomIn" title="放大">➕ 放大</button>
-  </div>
-  <div class="row">
-    <button id="btnReset" disabled>重置为47节点</button>
-  </div>
+
   <div class="stats">
     <span>节点 <b id="stNodes">0</b></span>
     <span>连线 <b id="stEdges">0</b></span>
@@ -245,7 +240,6 @@
 <input id="edgeInput" class="edge-input" type="text" placeholder="输入关系…" maxlength="24">
 <div id="toast"></div>
 
-<!-- 节点编辑面板 -->
 <div id="nodeEditor">
   <div class="ne-title">编辑节点</div>
 
@@ -264,7 +258,7 @@
 </div>
 
 <div class="hint">
-  点击连线中点即可写关系 · 双击节点编辑标签 · 拖动节点 · 滚轮缩放 · 空白拖拽平移 · 【连线】模式点两个节点 · Delete 删除
+  点击连线中点即可写关系 · 双击节点编辑标签 · 拖动节点 · 空白拖拽平移 · 【连线】模式点两个节点 · Delete 删除
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -391,8 +385,8 @@
       btnLock.classList.add('lock-on');
       readonlyBadge.classList.add('show');
     }
-    const editBtns = ['btnDrag', 'btnConnect', 'btnClear', 'btnReset'];
-    editBtns.forEach(id => {
+    // 只有拖动和连线需要解锁
+    ['btnDrag', 'btnConnect'].forEach(id => {
       const b = document.getElementById(id);
       if (b) b.disabled = !isUnlocked;
     });
@@ -426,10 +420,9 @@
   }
 
   // ====================================================================
-  // ===== 缩放按钮（手机友好） =====
+  // ===== 缩放按钮 =====
   // ====================================================================
   function zoomBy(factor) {
-    // 以画布可见区域中心为缩放中心
     const leftInset = W > 780 ? 250 : 0;
     const sx = leftInset + (W - leftInset) / 2;
     const sy = H / 2;
@@ -1289,19 +1282,6 @@
   btnDrag.onclick    = () => { if (!requireUnlock()) return; setMode('drag'); };
   btnConnect.onclick = () => { if (!requireUnlock()) return; setMode('connect'); };
 
-  document.getElementById('btnClear').onclick = async () => {
-    if (!requireUnlock()) return;
-    if (!edges.length) return;
-    if (!confirm('确定清除所有连线吗？此操作不可撤销。')) return;
-    if (editingEdge) cancelEdgeEditor();
-    edges = [];
-    selected = null;
-    connectFrom = null;
-    render();
-    if (cloudReady) await supabase.from('edges').delete().eq('room_id', ROOM_ID);
-    toast('已清除所有连线');
-  };
-
   document.getElementById('btnFit').onclick = () => {
     if (editingEdge) commitEdgeLabel();
     fitView(); render();
@@ -1309,27 +1289,6 @@
 
   document.getElementById('btnZoomIn').onclick  = () => zoomBy(1.25);
   document.getElementById('btnZoomOut').onclick = () => zoomBy(1 / 1.25);
-
-  document.getElementById('btnReset').onclick = async () => {
-    if (!requireUnlock()) return;
-    if (!confirm('重置为 47 个初始节点？当前云端数据也会被清空。')) return;
-    if (cloudReady) {
-      await supabase.from('edges').delete().eq('room_id', ROOM_ID);
-      await supabase.from('nodes').delete().eq('room_id', ROOM_ID);
-    }
-    makeLocalNodes();
-    render();
-    if (cloudReady) {
-      const nodeRows = nodes.map(n => ({
-        id: n.id, room_id: ROOM_ID, x: n.x, y: n.y, label: n.label, tags: []
-      }));
-      await supabase.from('nodes').insert(nodeRows);
-      toast('已重置并同步到云端');
-    } else {
-      toast('已重置（本地模式）');
-    }
-    fitView(); render();
-  };
 
   // ====================================================================
   // ===== 加载数据 + 实时订阅 =====
