@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>节点关系图 · 多人协作（密码保护 + 标签）</title>
+<title>节点关系图 · 多人协作（密码 + 标签 + 缩放）</title>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -11,6 +11,7 @@
     background: #0b1020;
     font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
   }
   canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: default; }
 
@@ -85,7 +86,9 @@
   }
   @media (max-width: 780px) {
     .hint { display: none; }
-    .panel { width: 178px; padding: 11px; transform: scale(.92); transform-origin: top left; }
+    .panel { width: 168px; padding: 10px; transform: scale(.92); transform-origin: top left; }
+    .panel .title { font-size: 12.5px; margin-bottom: 9px; }
+    button { font-size: 11.5px; padding: 9px 3px; }
   }
 
   #toast {
@@ -224,6 +227,10 @@
     <button id="btnFit">适应视图</button>
   </div>
   <div class="row">
+    <button id="btnZoomOut" title="缩小">➖ 缩小</button>
+    <button id="btnZoomIn" title="放大">➕ 放大</button>
+  </div>
+  <div class="row">
     <button id="btnReset" disabled>重置为47节点</button>
   </div>
   <div class="stats">
@@ -337,7 +344,6 @@
   let selected = null;
   let editingEdge = null;
 
-  // 节点编辑临时状态
   let editingNode = null;
   let editingTags = [];
 
@@ -420,6 +426,23 @@
   }
 
   // ====================================================================
+  // ===== 缩放按钮（手机友好） =====
+  // ====================================================================
+  function zoomBy(factor) {
+    // 以画布可见区域中心为缩放中心
+    const leftInset = W > 780 ? 250 : 0;
+    const sx = leftInset + (W - leftInset) / 2;
+    const sy = H / 2;
+
+    const newScale = clamp(view.scale * factor, 0.12, 4);
+    const k = newScale / view.scale;
+    view.x = sx - (sx - view.x) * k;
+    view.y = sy - (sy - view.y) * k;
+    view.scale = newScale;
+    render();
+  }
+
+  // ====================================================================
   // ===== 本地节点初始化 =====
   // ====================================================================
   function makeLocalNodes() {
@@ -452,7 +475,6 @@
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const n of nodes) {
       minX = Math.min(minX, n.x - R); maxX = Math.max(maxX, n.x + R);
-      // 标签可能延伸到节点下方
       const tagExtra = (n.tags && n.tags.length) ? 30 : 0;
       minY = Math.min(minY, n.y - R); maxY = Math.max(maxY, n.y + R + tagExtra);
     }
@@ -637,7 +659,6 @@
     }
   }
 
-  /** 绘制节点下方的标签 */
   function drawNodeTags(n) {
     if (!n.tags || !n.tags.length) return;
 
@@ -649,7 +670,6 @@
 
     ctx.font = `500 ${tagFontSize}px ${FONT}`;
 
-    // 限制最多显示 5 个标签，避免过宽
     const showTags = n.tags.slice(0, 5);
     const widths = showTags.map(t => ctx.measureText(t).width + padX * 2);
     const totalWidth = widths.reduce((a, b) => a + b, 0) + gap * (showTags.length - 1);
@@ -676,7 +696,6 @@
       x += pw + gap;
     }
 
-    // 如果还有更多，画一个 +N
     if (n.tags.length > 5) {
       const more = '+' + (n.tags.length - 5);
       ctx.font = `600 ${tagFontSize}px ${FONT}`;
@@ -725,7 +744,6 @@
     ctx.textBaseline = 'middle';
     ctx.fillText(String(n.label), n.x, n.y + 1);
 
-    // 绘制标签
     drawNodeTags(n);
   }
 
@@ -938,10 +956,9 @@
     const raw = neTagsInput.value;
     if (!raw) return;
 
-    // 支持中英文逗号、顿号、分号分隔
     const parts = raw.split(/[,，、;；]+/).map(s => s.trim()).filter(Boolean);
     for (const p of parts) {
-      const tag = p.slice(0, 8);   // 单个标签最多 8 字符
+      const tag = p.slice(0, 8);
       if (tag && !editingTags.includes(tag) && editingTags.length < 10) {
         editingTags.push(tag);
       }
@@ -957,13 +974,11 @@
       addTagFromInput();
     }
     if (ev.key === 'Backspace' && neTagsInput.value === '' && editingTags.length) {
-      // 输入框为空时按退格删除最后一个标签
       editingTags.pop();
       renderTagPreview();
     }
   });
 
-  // 失焦时也把输入内容加进去（防止用户忘了按回车）
   neTagsInput.addEventListener('blur', () => {
     if (neTagsInput.value.trim()) addTagFromInput();
   });
@@ -973,7 +988,6 @@
   neSave.addEventListener('click', async () => {
     if (!editingNode) return;
 
-    // 把输入框里残留的文字也加进去
     if (neTagsInput.value.trim()) addTagFromInput();
 
     const node = editingNode;
@@ -983,7 +997,6 @@
     const newLabel = neName.value.trim().slice(0, 6) || oldLabel;
     const newTags = [...editingTags];
 
-    // 判断是否有变化
     const sameLabel = newLabel === oldLabel;
     const sameTags = newTags.length === oldTags.length && newTags.every((t, i) => t === oldTags[i]);
     if (sameLabel && sameTags) {
@@ -991,12 +1004,10 @@
       return;
     }
 
-    // 本地先应用
     node.label = newLabel;
     node.tags = newTags;
     render();
 
-    // 询问
     const tagStr = (arr) => arr.length ? arr.join('、') : '（无）';
     const msg =
       `是否保存节点更改？\n\n` +
@@ -1015,11 +1026,9 @@
     }
   });
 
-  // 点击面板外区域关闭
   document.addEventListener('mousedown', (ev) => {
     if (nodeEditor.classList.contains('show') &&
         !nodeEditor.contains(ev.target)) {
-      // 不直接关闭，避免误触；如果用户点外面，视作取消
       closeNodeEditor();
     }
   });
@@ -1208,7 +1217,6 @@
     render();
   }, { passive: false });
 
-  // 双击节点打开编辑面板
   cv.addEventListener('dblclick', e => {
     if (!requireUnlock()) return;
     const p = toWorld(e.offsetX, e.offsetY);
@@ -1298,6 +1306,9 @@
     if (editingEdge) commitEdgeLabel();
     fitView(); render();
   };
+
+  document.getElementById('btnZoomIn').onclick  = () => zoomBy(1.25);
+  document.getElementById('btnZoomOut').onclick = () => zoomBy(1 / 1.25);
 
   document.getElementById('btnReset').onclick = async () => {
     if (!requireUnlock()) return;
