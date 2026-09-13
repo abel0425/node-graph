@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>节点关系图 · 多人协作</title>
+<title>节点关系图 · 多人协作（密码保护 + 标签）</title>
 <style>
   * { box-sizing: border-box; }
   html, body {
@@ -42,12 +42,20 @@
     border: 1px solid rgba(71, 85, 105, 0.8);
     transition: all .15s ease;
   }
-  button:hover { background: #334155; color: #e2e8f0; border-color: #38bdf8; }
-  button:active { transform: scale(0.97); }
+  button:hover:not(:disabled) { background: #334155; color: #e2e8f0; border-color: #38bdf8; }
+  button:active:not(:disabled) { transform: scale(0.97); }
   button.active {
     background: linear-gradient(180deg, #0ea5e9, #0284c7);
     color: #fff; border-color: #7dd3fc;
     box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  }
+  button:disabled {
+    opacity: 0.4; cursor: not-allowed; filter: grayscale(0.5);
+  }
+  button.lock-on {
+    background: linear-gradient(180deg, #f59e0b, #d97706);
+    color: #fff; border-color: #fbbf24;
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.4);
   }
   .stats {
     font-size: 11.5px; color: #64748b; margin-top: 10px;
@@ -89,6 +97,7 @@
     box-shadow: 0 10px 30px rgba(14, 165, 233, 0.35);
   }
   #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.warn { background: rgba(245, 158, 11, 0.95); }
 
   #status {
     position: fixed; top: 16px; right: 16px; z-index: 10;
@@ -101,6 +110,98 @@
   }
   #status.online  { color: #7dd3fc; border-color: rgba(56,189,248,0.6); }
   #status.offline { color: #f87171; border-color: rgba(248,113,113,0.6); }
+
+  #readonlyBadge {
+    position: fixed; bottom: 16px; right: 16px; z-index: 10;
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    background: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    backdrop-filter: blur(8px);
+    display: none;
+  }
+  #readonlyBadge.show { display: block; }
+
+  /* 节点编辑面板 */
+  #nodeEditor {
+    position: fixed; z-index: 40;
+    top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 320px; max-width: 90vw;
+    padding: 18px 20px;
+    background: rgba(15, 23, 42, 0.98);
+    border: 1.5px solid rgba(56, 189, 248, 0.6);
+    border-radius: 14px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+    color: #e2e8f0;
+    display: none;
+  }
+  #nodeEditor.show { display: block; }
+  #nodeEditor .ne-title {
+    font-size: 15px; font-weight: 700; margin-bottom: 14px;
+    color: #7dd3fc; letter-spacing: .5px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  #nodeEditor .ne-title::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: #38bdf8; box-shadow: 0 0 10px #38bdf8;
+  }
+  #nodeEditor label {
+    display: block;
+    font-size: 12px; color: #94a3b8; margin: 10px 0 5px;
+    font-weight: 600;
+  }
+  #nodeEditor input[type="text"] {
+    width: 100%; padding: 9px 12px;
+    font-size: 14px; font-family: inherit;
+    background: rgba(2, 6, 23, 0.8);
+    color: #e2e8f0;
+    border: 1px solid rgba(71, 85, 105, 0.7);
+    border-radius: 8px; outline: none;
+  }
+  #nodeEditor input[type="text"]:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  }
+  .tag-preview {
+    min-height: 28px;
+    margin-top: 8px;
+    padding: 6px 8px;
+    background: rgba(2, 6, 23, 0.5);
+    border-radius: 8px;
+    display: flex; flex-wrap: wrap; gap: 6px;
+    align-items: center;
+  }
+  .tag-preview:empty::before {
+    content: '标签预览区';
+    color: #475569; font-size: 11.5px;
+  }
+  .tag-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px;
+    background: rgba(56, 189, 248, 0.15);
+    color: #7dd3fc;
+    border: 1px solid rgba(56, 189, 248, 0.5);
+    border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+  }
+  .tag-chip .x {
+    cursor: pointer; color: #f87171;
+    font-weight: 700; font-size: 14px; line-height: 1;
+    padding: 0 2px;
+  }
+  .tag-chip .x:hover { color: #fca5a5; }
+  .ne-actions {
+    display: flex; gap: 10px; margin-top: 16px;
+  }
+  .ne-actions button {
+    flex: 1; padding: 9px 0; font-size: 13px;
+  }
+  .ne-save {
+    background: linear-gradient(180deg, #0ea5e9, #0284c7) !important;
+    color: #fff !important; border-color: #7dd3fc !important;
+  }
+  .ne-save:hover { filter: brightness(1.1); }
 </style>
 </head>
 <body>
@@ -109,16 +210,21 @@
 
 <div class="panel">
   <div class="title">节点关系图</div>
+
   <div class="row">
-    <button id="btnDrag" class="active">✋ 拖动</button>
-    <button id="btnConnect">🔗 连线</button>
+    <button id="btnLock" class="lock-on" style="flex:100%">🔒 解锁编辑</button>
+  </div>
+
+  <div class="row">
+    <button id="btnDrag" class="active" disabled>✋ 拖动</button>
+    <button id="btnConnect" disabled>🔗 连线</button>
   </div>
   <div class="row">
-    <button id="btnClear">清除连线</button>
+    <button id="btnClear" disabled>清除连线</button>
     <button id="btnFit">适应视图</button>
   </div>
   <div class="row">
-    <button id="btnReset">重置为47节点</button>
+    <button id="btnReset" disabled>重置为47节点</button>
   </div>
   <div class="stats">
     <span>节点 <b id="stNodes">0</b></span>
@@ -127,15 +233,33 @@
 </div>
 
 <div id="status">连接中…</div>
+<div id="readonlyBadge">👁 只读模式 · 点击左上角解锁才能编辑</div>
 
 <input id="edgeInput" class="edge-input" type="text" placeholder="输入关系…" maxlength="24">
 <div id="toast"></div>
 
-<div class="hint">
-  点击连线中点即可写关系 · 拖动节点 · 滚轮缩放 · 空白拖拽平移 · 【连线】模式点两个节点 · Delete 删除
+<!-- 节点编辑面板 -->
+<div id="nodeEditor">
+  <div class="ne-title">编辑节点</div>
+
+  <label for="neName">节点名称（最多 6 个字符）</label>
+  <input id="neName" type="text" maxlength="6" placeholder="节点名">
+
+  <label for="neTagsInput">标签（输入后按回车或逗号添加）</label>
+  <input id="neTagsInput" type="text" placeholder="例如：同学、好友、2025级">
+
+  <div id="nePreview" class="tag-preview"></div>
+
+  <div class="ne-actions">
+    <button id="neCancel">取消</button>
+    <button id="neSave" class="ne-save">保存</button>
+  </div>
 </div>
 
-<!-- Supabase SDK -->
+<div class="hint">
+  点击连线中点即可写关系 · 双击节点编辑标签 · 拖动节点 · 滚轮缩放 · 空白拖拽平移 · 【连线】模式点两个节点 · Delete 删除
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
 <script>
@@ -143,10 +267,11 @@
   'use strict';
 
   // ====================================================================
-  // ===== 配置区：只改下面两个值 =====
+  // ===== 配置区 =====
   // ====================================================================
   const SUPABASE_URL      = 'https://jokhrqkzktskdthpnspw.supabase.co';
   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impva2hycWt6a3Rza2R0aHBuc3B3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjQwMjQsImV4cCI6MjEwNDg0MDAyNH0.T84OrVHY_FXA-r-6kZB3GAZdaiZfm1lG4yUE2ZWSYN4';   // ← 替换成真实的 anon key
+  const EDIT_PASSWORD     = '1234';           // ← 改成你自己的密码
 
   const ROOM_ID = new URLSearchParams(location.search).get('room') || 'default';
 
@@ -154,6 +279,7 @@
   let cloudReady = false;
   let channel = null;
   let reconnectTimer = null;
+  let isUnlocked = false;
 
   // ====================================================================
   // ===== Supabase 初始化 =====
@@ -171,7 +297,7 @@
   }
 
   // ====================================================================
-  // ===== 画布基础变量 =====
+  // ===== DOM =====
   // ====================================================================
   const cv        = document.getElementById('cv');
   const ctx       = cv.getContext('2d');
@@ -180,6 +306,14 @@
   const stEdges   = document.getElementById('stEdges');
   const toastEl   = document.getElementById('toast');
   const statusEl  = document.getElementById('status');
+  const readonlyBadge = document.getElementById('readonlyBadge');
+  const btnLock   = document.getElementById('btnLock');
+  const nodeEditor = document.getElementById('nodeEditor');
+  const neName    = document.getElementById('neName');
+  const neTagsInput = document.getElementById('neTagsInput');
+  const nePreview = document.getElementById('nePreview');
+  const neCancel  = document.getElementById('neCancel');
+  const neSave    = document.getElementById('neSave');
 
   const FONT = 'system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif';
   const NODE_COUNT = 47;
@@ -195,6 +329,7 @@
 
   let mode = 'drag';
   let dragNode = null, dragOff = { x: 0, y: 0 };
+  let dragStartPos = null;
   let panning = false, panStart = { x: 0, y: 0 };
   let connectFrom = null;
   let mouseWorld = { x: 0, y: 0 };
@@ -202,7 +337,10 @@
   let selected = null;
   let editingEdge = null;
 
-  // 拖动节流用
+  // 节点编辑临时状态
+  let editingNode = null;
+  let editingTags = [];
+
   const pushTimers = new Map();
 
   // ====================================================================
@@ -222,16 +360,63 @@
   }
 
   let toastTimer;
-  function toast(msg) {
+  function toast(msg, warn) {
     toastEl.textContent = msg;
-    toastEl.classList.add('show');
+    toastEl.className = warn ? 'show warn' : 'show';
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1500);
+    toastTimer = setTimeout(() => { toastEl.className = ''; }, 1800);
   }
 
   function setStatus(text, cls) {
     statusEl.textContent = text;
     statusEl.className = cls || '';
+  }
+
+  // ====================================================================
+  // ===== 密码 / 解锁逻辑 =====
+  // ====================================================================
+  function updateLockUI() {
+    if (isUnlocked) {
+      btnLock.textContent = '🔓 编辑已解锁（点击锁定）';
+      btnLock.classList.remove('lock-on');
+      readonlyBadge.classList.remove('show');
+    } else {
+      btnLock.textContent = '🔒 解锁编辑';
+      btnLock.classList.add('lock-on');
+      readonlyBadge.classList.add('show');
+    }
+    const editBtns = ['btnDrag', 'btnConnect', 'btnClear', 'btnReset'];
+    editBtns.forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.disabled = !isUnlocked;
+    });
+    if (!isUnlocked) setMode('drag');
+  }
+
+  btnLock.addEventListener('click', () => {
+    if (isUnlocked) {
+      isUnlocked = false;
+      updateLockUI();
+      toast('已锁定为只读模式', true);
+      return;
+    }
+    const pw = prompt('请输入编辑密码：');
+    if (pw === null) return;
+    if (pw === EDIT_PASSWORD) {
+      isUnlocked = true;
+      updateLockUI();
+      toast('已进入编辑模式');
+    } else {
+      toast('密码错误', true);
+    }
+  });
+
+  function requireUnlock() {
+    if (!isUnlocked) {
+      toast('请先点左上角「解锁编辑」并输入密码', true);
+      return false;
+    }
+    return true;
   }
 
   // ====================================================================
@@ -247,6 +432,7 @@
         x: c * gap,
         y: r * gap,
         label: String(i + 1),
+        tags: [],
         version: 1
       });
     }
@@ -255,6 +441,7 @@
     selected = null;
     connectFrom = null;
     editingEdge = null;
+    editingNode = null;
   }
 
   // ====================================================================
@@ -265,7 +452,9 @@
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const n of nodes) {
       minX = Math.min(minX, n.x - R); maxX = Math.max(maxX, n.x + R);
-      minY = Math.min(minY, n.y - R); maxY = Math.max(maxY, n.y + R);
+      // 标签可能延伸到节点下方
+      const tagExtra = (n.tags && n.tags.length) ? 30 : 0;
+      minY = Math.min(minY, n.y - R); maxY = Math.max(maxY, n.y + R + tagExtra);
     }
     const leftInset = W > 780 ? 250 : 0;
     const pad = 60;
@@ -319,38 +508,39 @@
   }
 
   // ====================================================================
-  // ===== 数据操作：本地 + 云端 =====
+  // ===== 数据操作 =====
   // ====================================================================
-
-  /** 拖动节点：节流写回 + 乐观锁 */
-  function throttledUpdateNode(node) {
+  async function saveNodePosition(node) {
     if (!cloudReady) return;
-    clearTimeout(pushTimers.get(node.id));
-    pushTimers.set(node.id, setTimeout(async () => {
-      try {
-        const { data, error } = await supabase
-          .from('nodes')
-          .update({ x: node.x, y: node.y })
-          .eq('id', node.id)
-          .eq('version', node.version)
-          .select()
-          .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from('nodes')
+        .update({ x: node.x, y: node.y })
+        .eq('id', node.id)
+        .eq('version', node.version)
+        .select()
+        .maybeSingle();
+      if (error) { console.warn('保存位置失败：', error.message); return; }
+      if (!data) { await refreshNode(node.id); return; }
+      node.version = data.version;
+    } catch (err) { console.warn('保存位置异常：', err); }
+  }
 
-        if (error) {
-          console.warn('更新节点失败：', error.message);
-          return;
-        }
-        if (!data) {
-          // 版本不匹配 = 有人先改了，拉取最新
-          console.warn('节点', node.id, '版本冲突，拉取最新');
-          await refreshNode(node.id);
-          return;
-        }
-        node.version = data.version;
-      } catch (err) {
-        console.warn('更新节点异常：', err);
-      }
-    }, 120));
+  async function saveNodeFull(node) {
+    if (!cloudReady) return;
+    try {
+      const { data, error } = await supabase
+        .from('nodes')
+        .update({ label: node.label, tags: node.tags })
+        .eq('id', node.id)
+        .eq('version', node.version)
+        .select()
+        .maybeSingle();
+      if (error) { console.warn('保存节点失败：', error.message); toast('保存失败', true); return; }
+      if (!data) { toast('该节点已被他人修改，已拉取最新', true); await refreshNode(node.id); return; }
+      node.version = data.version;
+      toast('已保存');
+    } catch (err) { console.warn('保存节点异常：', err); }
   }
 
   async function refreshNode(id) {
@@ -363,94 +553,55 @@
         n.x = Number(data.x);
         n.y = Number(data.y);
         n.label = data.label;
+        n.tags = Array.isArray(data.tags) ? data.tags : [];
         n.version = data.version;
         render();
       }
     }
   }
 
-  /** 创建节点 */
-  async function createNodeRemote(node) {
-    if (!cloudReady) return;
-    const { data, error } = await supabase
-      .from('nodes')
-      .insert({
-        id: node.id,
-        room_id: ROOM_ID,
-        x: node.x,
-        y: node.y,
-        label: node.label
-      })
-      .select()
-      .maybeSingle();
-    if (error) { console.warn('创建节点失败：', error.message); return; }
-    if (data) node.version = data.version;
-  }
-
-  /** 删除节点（连带删除关联边） */
   async function deleteNodeRemote(id) {
     if (!cloudReady) return;
     await supabase.from('edges').delete().or(`a.eq.${id},b.eq.${id}`).eq('room_id', ROOM_ID);
     await supabase.from('nodes').delete().eq('id', id).eq('room_id', ROOM_ID);
   }
 
-  /** 创建边 */
   async function createEdgeRemote(edge) {
     if (!cloudReady) return;
     const { data, error } = await supabase
       .from('edges')
       .insert({
-        id: edge.id,
-        room_id: ROOM_ID,
-        a: edge.a,
-        b: edge.b,
-        label: edge.label || ''
+        id: edge.id, room_id: ROOM_ID,
+        a: edge.a, b: edge.b, label: edge.label || ''
       })
-      .select()
-      .maybeSingle();
+      .select().maybeSingle();
     if (error) { console.warn('创建边失败：', error.message); return; }
     if (data) edge.version = data.version;
   }
 
-  /** 更新边标签（乐观锁） */
   async function updateEdgeLabelRemote(edge) {
     if (!cloudReady) return;
     try {
       const { data, error } = await supabase
         .from('edges')
         .update({ label: edge.label })
-        .eq('id', edge.id)
-        .eq('version', edge.version)
-        .select()
-        .maybeSingle();
-
+        .eq('id', edge.id).eq('version', edge.version)
+        .select().maybeSingle();
       if (error) { console.warn('更新边失败：', error.message); return; }
-      if (!data) {
-        toast('这条连线已被其他人修改');
-        await refreshEdge(edge.id);
-      } else {
-        edge.version = data.version;
-      }
-    } catch (err) {
-      console.warn('更新边异常：', err);
-    }
+      if (!data) { toast('这条连线已被其他人修改', true); await refreshEdge(edge.id); }
+      else edge.version = data.version;
+    } catch (err) { console.warn('更新边异常：', err); }
   }
 
   async function refreshEdge(id) {
     if (!cloudReady) return;
-    const { data } = await supabase
-      .from('edges').select('*').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('edges').select('*').eq('id', id).maybeSingle();
     if (data) {
       const e = edges.find(x => String(x.id) === String(id));
-      if (e) {
-        e.label = data.label || '';
-        e.version = data.version;
-        render();
-      }
+      if (e) { e.label = data.label || ''; e.version = data.version; render(); }
     }
   }
 
-  /** 删除边 */
   async function deleteEdgeRemote(id) {
     if (!cloudReady) return;
     await supabase.from('edges').delete().eq('id', id).eq('room_id', ROOM_ID);
@@ -483,6 +634,60 @@
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+  }
+
+  /** 绘制节点下方的标签 */
+  function drawNodeTags(n) {
+    if (!n.tags || !n.tags.length) return;
+
+    const tagFontSize = 11;
+    const tagH = 16;
+    const gap = 4;
+    const padX = 7;
+    const startY = n.y + R + 7;
+
+    ctx.font = `500 ${tagFontSize}px ${FONT}`;
+
+    // 限制最多显示 5 个标签，避免过宽
+    const showTags = n.tags.slice(0, 5);
+    const widths = showTags.map(t => ctx.measureText(t).width + padX * 2);
+    const totalWidth = widths.reduce((a, b) => a + b, 0) + gap * (showTags.length - 1);
+
+    let x = n.x - totalWidth / 2;
+    const y = startY;
+
+    for (let i = 0; i < showTags.length; i++) {
+      const tag = showTags[i];
+      const pw = widths[i];
+
+      roundRect(x, y, pw, tagH, tagH / 2);
+      ctx.fillStyle = 'rgba(56,189,248,0.16)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(56,189,248,0.55)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      ctx.fillStyle = '#7dd3fc';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(tag, x + pw / 2, y + tagH / 2 + 0.5);
+
+      x += pw + gap;
+    }
+
+    // 如果还有更多，画一个 +N
+    if (n.tags.length > 5) {
+      const more = '+' + (n.tags.length - 5);
+      ctx.font = `600 ${tagFontSize}px ${FONT}`;
+      const mw = ctx.measureText(more).width + padX * 2;
+      roundRect(x, y, mw, tagH, tagH / 2);
+      ctx.fillStyle = 'rgba(148,163,184,0.18)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(148,163,184,0.5)';
+      ctx.stroke();
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(more, x + mw / 2, y + tagH / 2 + 0.5);
     }
   }
 
@@ -519,6 +724,9 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(String(n.label), n.x, n.y + 1);
+
+    // 绘制标签
+    drawNodeTags(n);
   }
 
   function drawEdgeLabel(e) {
@@ -556,11 +764,8 @@
     e._rect = { x, y, w: bw, h: bh };
 
     roundRect(x, y, bw, bh, 9);
-    if (hasLabel) {
-      ctx.fillStyle = 'rgba(11,16,32,0.97)';
-    } else {
-      ctx.fillStyle = active ? 'rgba(56,189,248,0.20)' : 'rgba(15,23,42,0.7)';
-    }
+    if (hasLabel) ctx.fillStyle = 'rgba(11,16,32,0.97)';
+    else ctx.fillStyle = active ? 'rgba(56,189,248,0.20)' : 'rgba(15,23,42,0.7)';
     ctx.fill();
 
     ctx.lineWidth = active ? 1.8 : 1.2;
@@ -626,6 +831,7 @@
   // ===== 边编辑输入框 =====
   // ====================================================================
   function openEdgeEditor(edge) {
+    if (!requireUnlock()) return;
     const a = getNode(edge.a), b = getNode(edge.b);
     if (!a || !b) return;
     const p = toScreen((a.x + b.x) / 2, (a.y + b.y) / 2);
@@ -641,15 +847,30 @@
     edgeInput.select();
   }
 
-  function commitEdgeLabel() {
+  async function commitEdgeLabel() {
     if (!editingEdge) return;
     const e = editingEdge;
     editingEdge = null;
-    e.label = edgeInput.value.trim();
+    const newLabel = edgeInput.value.trim();
+    const oldLabel = e.label || '';
+
     edgeInput.style.display = 'none';
     edgeInput.blur();
+
+    if (newLabel === oldLabel) { render(); return; }
+
+    e.label = newLabel;
     render();
-    updateEdgeLabelRemote(e);
+
+    const save = confirm(`是否保存这条连线的关系文字？\n\n原内容：「${oldLabel || '（空）'}」\n新内容：「${newLabel || '（空）'}」`);
+    if (save) {
+      await updateEdgeLabelRemote(e);
+      toast('已保存');
+    } else {
+      e.label = oldLabel;
+      render();
+      toast('已取消保存', true);
+    }
   }
 
   function cancelEdgeEditor() {
@@ -668,6 +889,142 @@
   edgeInput.addEventListener('blur', commitEdgeLabel);
 
   // ====================================================================
+  // ===== 节点编辑面板 =====
+  // ====================================================================
+  function openNodeEditor(node) {
+    if (!requireUnlock()) return;
+
+    editingNode = node;
+    editingTags = Array.isArray(node.tags) ? [...node.tags] : [];
+
+    neName.value = node.label;
+    neTagsInput.value = '';
+    renderTagPreview();
+
+    nodeEditor.classList.add('show');
+    setTimeout(() => neName.focus(), 30);
+  }
+
+  function closeNodeEditor() {
+    editingNode = null;
+    editingTags = [];
+    nodeEditor.classList.remove('show');
+  }
+
+  function renderTagPreview() {
+    nePreview.innerHTML = '';
+    for (let i = 0; i < editingTags.length; i++) {
+      const tag = editingTags[i];
+      const chip = document.createElement('span');
+      chip.className = 'tag-chip';
+      chip.textContent = tag;
+
+      const x = document.createElement('span');
+      x.className = 'x';
+      x.textContent = '×';
+      x.title = '删除此标签';
+      x.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        editingTags.splice(i, 1);
+        renderTagPreview();
+      });
+
+      chip.appendChild(x);
+      nePreview.appendChild(chip);
+    }
+  }
+
+  function addTagFromInput() {
+    const raw = neTagsInput.value;
+    if (!raw) return;
+
+    // 支持中英文逗号、顿号、分号分隔
+    const parts = raw.split(/[,，、;；]+/).map(s => s.trim()).filter(Boolean);
+    for (const p of parts) {
+      const tag = p.slice(0, 8);   // 单个标签最多 8 字符
+      if (tag && !editingTags.includes(tag) && editingTags.length < 10) {
+        editingTags.push(tag);
+      }
+    }
+    neTagsInput.value = '';
+    renderTagPreview();
+  }
+
+  neTagsInput.addEventListener('keydown', ev => {
+    ev.stopPropagation();
+    if (ev.key === 'Enter' || ev.key === ',' || ev.key === '，') {
+      ev.preventDefault();
+      addTagFromInput();
+    }
+    if (ev.key === 'Backspace' && neTagsInput.value === '' && editingTags.length) {
+      // 输入框为空时按退格删除最后一个标签
+      editingTags.pop();
+      renderTagPreview();
+    }
+  });
+
+  // 失焦时也把输入内容加进去（防止用户忘了按回车）
+  neTagsInput.addEventListener('blur', () => {
+    if (neTagsInput.value.trim()) addTagFromInput();
+  });
+
+  neCancel.addEventListener('click', closeNodeEditor);
+
+  neSave.addEventListener('click', async () => {
+    if (!editingNode) return;
+
+    // 把输入框里残留的文字也加进去
+    if (neTagsInput.value.trim()) addTagFromInput();
+
+    const node = editingNode;
+    const oldLabel = node.label;
+    const oldTags = Array.isArray(node.tags) ? [...node.tags] : [];
+
+    const newLabel = neName.value.trim().slice(0, 6) || oldLabel;
+    const newTags = [...editingTags];
+
+    // 判断是否有变化
+    const sameLabel = newLabel === oldLabel;
+    const sameTags = newTags.length === oldTags.length && newTags.every((t, i) => t === oldTags[i]);
+    if (sameLabel && sameTags) {
+      closeNodeEditor();
+      return;
+    }
+
+    // 本地先应用
+    node.label = newLabel;
+    node.tags = newTags;
+    render();
+
+    // 询问
+    const tagStr = (arr) => arr.length ? arr.join('、') : '（无）';
+    const msg =
+      `是否保存节点更改？\n\n` +
+      `名称：\n  原：「${oldLabel}」\n  新：「${newLabel}」\n\n` +
+      `标签：\n  原：「${tagStr(oldTags)}」\n  新：「${tagStr(newTags)}」`;
+
+    closeNodeEditor();
+
+    if (confirm(msg)) {
+      await saveNodeFull(node);
+    } else {
+      node.label = oldLabel;
+      node.tags = oldTags;
+      render();
+      toast('已取消保存', true);
+    }
+  });
+
+  // 点击面板外区域关闭
+  document.addEventListener('mousedown', (ev) => {
+    if (nodeEditor.classList.contains('show') &&
+        !nodeEditor.contains(ev.target)) {
+      // 不直接关闭，避免误触；如果用户点外面，视作取消
+      closeNodeEditor();
+    }
+  });
+
+  // ====================================================================
   // ===== 指针交互 =====
   // ====================================================================
   cv.addEventListener('pointerdown', e => {
@@ -678,6 +1035,7 @@
     const p = toWorld(e.offsetX, e.offsetY);
 
     if (mode === 'connect') {
+      if (!isUnlocked) { toast('请先解锁编辑', true); return; }
       const n = nodeAt(p.x, p.y);
       if (!n) { connectFrom = null; render(); return; }
 
@@ -693,22 +1051,26 @@
           (String(x.a) === String(bId) && String(x.b) === String(aId))
         );
         if (dup) {
-          toast('这两个节点已经连过了');
+          toast('这两个节点已经连过了', true);
           connectFrom = null;
           render();
           return;
         }
+
+        const aNode = getNode(aId), bNode = getNode(bId);
+        const ok = confirm(`是否创建连线？\n\n${aNode.label} ←→ ${bNode.label}`);
+        connectFrom = null;
+
+        if (!ok) { render(); return; }
 
         const newEdge = {
           id: 'e' + Date.now() + '_' + Math.floor(Math.random() * 1000),
           a: aId, b: bId, label: '', version: 1
         };
         edges.push(newEdge);
-        connectFrom = null;
         selected = { type: 'edge', id: newEdge.id };
         render();
         openEdgeEditor(newEdge);
-
         createEdgeRemote(newEdge);
         return;
       }
@@ -718,8 +1080,14 @@
 
     const n = nodeAt(p.x, p.y);
     if (n) {
+      if (!isUnlocked) {
+        selected = { type: 'node', id: n.id };
+        render();
+        return;
+      }
       selected = { type: 'node', id: n.id };
       dragNode = n;
+      dragStartPos = { x: n.x, y: n.y };
       dragOff = { x: p.x - n.x, y: p.y - n.y };
       nodes.splice(nodes.indexOf(n), 1);
       nodes.push(n);
@@ -758,7 +1126,6 @@
     if (dragNode) {
       dragNode.x = mouseWorld.x - dragOff.x;
       dragNode.y = mouseWorld.y - dragOff.y;
-      throttledUpdateNode(dragNode);
       render();
       return;
     }
@@ -783,19 +1150,40 @@
       hoverNode = n;
       hoverEdge = ed;
       cv.style.cursor =
-        mode === 'connect' ? 'crosshair' :
-        n        ? 'grab' :
-        onLabel  ? 'text' :
-        ed       ? 'pointer' : 'default';
+        mode === 'connect' && isUnlocked ? 'crosshair' :
+        n && isUnlocked ? 'grab' :
+        onLabel && isUnlocked ? 'text' :
+        ed && isUnlocked ? 'pointer' : 'default';
     }
     if (changed || connectFrom !== null) render();
   });
 
-  function endPointer() {
-    dragNode = null;
-    panning = false;
-    cv.style.cursor = mode === 'connect' ? 'crosshair' : 'default';
+  async function endPointer() {
+    if (dragNode && dragStartPos) {
+      const node = dragNode;
+      const startPos = dragStartPos;
+      dragNode = null;
+      dragStartPos = null;
+
+      const moved = Math.abs(node.x - startPos.x) > 1 || Math.abs(node.y - startPos.y) > 1;
+      if (moved) {
+        const save = confirm(`是否保存节点「${node.label}」的位置更改？`);
+        if (save) {
+          await saveNodePosition(node);
+          toast('已保存位置');
+        } else {
+          node.x = startPos.x;
+          node.y = startPos.y;
+          toast('已取消，位置还原', true);
+          render();
+        }
+      }
+    }
+
+    if (panning) panning = false;
+    cv.style.cursor = mode === 'connect' && isUnlocked ? 'crosshair' : 'default';
   }
+
   cv.addEventListener('pointerup', endPointer);
   cv.addEventListener('pointercancel', endPointer);
 
@@ -820,55 +1208,57 @@
     render();
   }, { passive: false });
 
+  // 双击节点打开编辑面板
   cv.addEventListener('dblclick', e => {
+    if (!requireUnlock()) return;
     const p = toWorld(e.offsetX, e.offsetY);
     const n = nodeAt(p.x, p.y);
-    if (n) {
-      const v = prompt('修改节点名称：', n.label);
-      if (v !== null && v.trim()) {
-        n.label = v.trim().slice(0, 6);
-        render();
-        if (cloudReady) {
-          supabase.from('nodes')
-            .update({ label: n.label })
-            .eq('id', n.id)
-            .eq('version', n.version)
-            .select()
-            .maybeSingle()
-            .then(({ data }) => { if (data) n.version = data.version; });
-        }
-      }
-    }
+    if (n) openNodeEditor(n);
   });
 
-  window.addEventListener('keydown', e => {
+  window.addEventListener('keydown', async e => {
     if (document.activeElement === edgeInput) return;
+    if (document.activeElement === neName) return;
+    if (document.activeElement === neTagsInput) return;
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (selected) {
+      if (selected && isUnlocked) {
         e.preventDefault();
         if (selected.type === 'node') {
           const id = selected.id;
-          nodes = nodes.filter(n => String(n.id) !== String(id));
+          const n = getNode(id);
+          if (!n) return;
+          const save = confirm(`是否删除节点「${n.label}」？\n（与它相连的边也会一并删除）`);
+          if (!save) { toast('已取消删除', true); return; }
+          nodes = nodes.filter(x => String(x.id) !== String(id));
           edges = edges.filter(x => String(x.a) !== String(id) && String(x.b) !== String(id));
-          deleteNodeRemote(id);
+          render();
+          await deleteNodeRemote(id);
+          toast('已删除节点');
         } else {
           const id = selected.id;
+          const ed = edges.find(x => String(x.id) === String(id));
+          if (!ed) return;
+          const a = getNode(ed.a), b = getNode(ed.b);
+          const save = confirm(`是否删除连线？\n\n${a ? a.label : '?'} ←→ ${b ? b.label : '?'}`);
+          if (!save) { toast('已取消删除', true); return; }
           edges = edges.filter(x => String(x.id) !== String(id));
-          deleteEdgeRemote(id);
+          render();
+          await deleteEdgeRemote(id);
+          toast('已删除连线');
         }
         selected = null;
-        render();
       }
     }
     if (e.key === 'Escape') {
       connectFrom = null;
       selected = null;
       if (editingEdge) cancelEdgeEditor();
+      if (nodeEditor.classList.contains('show')) closeNodeEditor();
       render();
     }
-    if (e.key === '1') setMode('drag');
-    if (e.key === '2') setMode('connect');
+    if (e.key === '1' && isUnlocked) setMode('drag');
+    if (e.key === '2' && isUnlocked) setMode('connect');
   });
 
   // ====================================================================
@@ -878,29 +1268,29 @@
   const btnConnect = document.getElementById('btnConnect');
 
   function setMode(m) {
+    if (!isUnlocked) m = 'drag';
     mode = m;
     connectFrom = null;
     if (editingEdge) commitEdgeLabel();
     btnDrag.classList.toggle('active', m === 'drag');
     btnConnect.classList.toggle('active', m === 'connect');
-    cv.style.cursor = m === 'connect' ? 'crosshair' : 'default';
+    cv.style.cursor = m === 'connect' && isUnlocked ? 'crosshair' : 'default';
     render();
   }
 
-  btnDrag.onclick    = () => setMode('drag');
-  btnConnect.onclick = () => setMode('connect');
+  btnDrag.onclick    = () => { if (!requireUnlock()) return; setMode('drag'); };
+  btnConnect.onclick = () => { if (!requireUnlock()) return; setMode('connect'); };
 
   document.getElementById('btnClear').onclick = async () => {
+    if (!requireUnlock()) return;
     if (!edges.length) return;
-    if (!confirm('确定清除所有连线吗？')) return;
+    if (!confirm('确定清除所有连线吗？此操作不可撤销。')) return;
     if (editingEdge) cancelEdgeEditor();
     edges = [];
     selected = null;
     connectFrom = null;
     render();
-    if (cloudReady) {
-      await supabase.from('edges').delete().eq('room_id', ROOM_ID);
-    }
+    if (cloudReady) await supabase.from('edges').delete().eq('room_id', ROOM_ID);
     toast('已清除所有连线');
   };
 
@@ -910,6 +1300,7 @@
   };
 
   document.getElementById('btnReset').onclick = async () => {
+    if (!requireUnlock()) return;
     if (!confirm('重置为 47 个初始节点？当前云端数据也会被清空。')) return;
     if (cloudReady) {
       await supabase.from('edges').delete().eq('room_id', ROOM_ID);
@@ -919,7 +1310,7 @@
     render();
     if (cloudReady) {
       const nodeRows = nodes.map(n => ({
-        id: n.id, room_id: ROOM_ID, x: n.x, y: n.y, label: n.label
+        id: n.id, room_id: ROOM_ID, x: n.x, y: n.y, label: n.label, tags: []
       }));
       await supabase.from('nodes').insert(nodeRows);
       toast('已重置并同步到云端');
@@ -933,61 +1324,42 @@
   // ===== 加载数据 + 实时订阅 =====
   // ====================================================================
   async function loadInitialData() {
-  const [nodesRes, edgesRes] = await Promise.all([
-    supabase.from('nodes').select('*').eq('room_id', ROOM_ID),
-    supabase.from('edges').select('*').eq('room_id', ROOM_ID)
-  ]);
+    const [nodesRes, edgesRes] = await Promise.all([
+      supabase.from('nodes').select('*').eq('room_id', ROOM_ID),
+      supabase.from('edges').select('*').eq('room_id', ROOM_ID)
+    ]);
 
-  if (nodesRes.error) throw nodesRes.error;
-  if (edgesRes.error) throw edgesRes.error;
+    if (nodesRes.error) throw nodesRes.error;
+    if (edgesRes.error) throw edgesRes.error;
 
-  nodes = (nodesRes.data || []).map(n => ({
-    id: String(n.id),
-    x: Number(n.x),
-    y: Number(n.y),
-    label: n.label,
-    version: n.version
-  }));
-
-  edges = (edgesRes.data || []).map(e => ({
-    id: String(e.id),
-    a: String(e.a),
-    b: String(e.b),
-    label: e.label || '',
-    version: e.version
-  }));
-
-  // 云端没有节点 → 用本地 47 节点初始化，并写入云端
-  if (nodes.length === 0) {
-    console.log('[Supabase] 云端为空，准备初始化 47 节点到 room =', ROOM_ID);
-    makeLocalNodes();
-
-    const nodeRows = nodes.map(n => ({
-      id: n.id,
-      room_id: ROOM_ID,
-      x: n.x,
-      y: n.y,
-      label: n.label
+    nodes = (nodesRes.data || []).map(n => ({
+      id: String(n.id),
+      x: Number(n.x),
+      y: Number(n.y),
+      label: n.label,
+      tags: Array.isArray(n.tags) ? n.tags : [],
+      version: n.version
     }));
 
-    const { data, error } = await supabase
-      .from('nodes')
-      .insert(nodeRows)
-      .select();
+    edges = (edgesRes.data || []).map(e => ({
+      id: String(e.id),
+      a: String(e.a),
+      b: String(e.b),
+      label: e.label || '',
+      version: e.version
+    }));
 
-    if (error) {
-      console.error('❌ 初始化节点写入失败：', error);
-      console.error('   code:', error.code);
-      console.error('   message:', error.message);
-      console.error('   details:', error.details);
-      console.error('   hint:', error.hint);
-    } else {
-      console.log('✅ 已写入', data.length, '个节点到', ROOM_ID);
+    if (nodes.length === 0) {
+      console.log('[Supabase] 云端为空，初始化 47 节点');
+      makeLocalNodes();
+      const nodeRows = nodes.map(n => ({
+        id: n.id, room_id: ROOM_ID, x: n.x, y: n.y, label: n.label, tags: []
+      }));
+      const { data, error } = await supabase.from('nodes').insert(nodeRows).select();
+      if (error) console.error('❌ 初始化节点写入失败：', error);
+      else console.log('✅ 已写入', data.length, '个节点到', ROOM_ID);
     }
-  } else {
-    console.log('[Supabase] 从云端加载了', nodes.length, '个节点，', edges.length, '条边');
   }
-}
 
   function subscribeRealtime() {
     if (!cloudReady) return;
@@ -1016,7 +1388,8 @@
             if (!getNode(row.id)) {
               nodes.push({
                 id: String(row.id), x: Number(row.x), y: Number(row.y),
-                label: row.label, version: row.version
+                label: row.label, tags: Array.isArray(row.tags) ? row.tags : [],
+                version: row.version
               });
             }
           } else if (eventType === 'UPDATE') {
@@ -1026,6 +1399,7 @@
               n.x = Number(row.x);
               n.y = Number(row.y);
               n.label = row.label;
+              n.tags = Array.isArray(row.tags) ? row.tags : [];
               n.version = row.version;
             }
           } else if (eventType === 'DELETE') {
@@ -1057,9 +1431,8 @@
         })
       .subscribe((status) => {
         console.log('[Realtime] 状态：', status);
-        if (status === 'SUBSCRIBED') {
-          setStatus('已连接 · 多人协作中', 'online');
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (status === 'SUBSCRIBED') setStatus('已连接 · 多人协作中', 'online');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           setStatus('连接异常，重连中…', 'offline');
           scheduleReconnect();
         }
@@ -1086,9 +1459,7 @@
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && cloudReady) {
-      if (!channel || channel.state !== 'joined') {
-        scheduleReconnect();
-      }
+      if (!channel || channel.state !== 'joined') scheduleReconnect();
     }
   });
 
@@ -1097,6 +1468,7 @@
   // ====================================================================
   async function init() {
     resize();
+    updateLockUI();
 
     if (cloudReady) {
       try {
