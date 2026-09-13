@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>节点关系图 · 多人协作</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #0b1020;
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  canvas { display: block; width: 100vw; height: 100vh; touch-action: none; cursor: default; }
+
+  .panel {
+    position: fixed; top: 16px; left: 16px; z-index: 10;
+    width: 218px; padding: 14px;
+    background: rgba(17, 24, 39, 0.82);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(56, 189, 248, 0.18);
+    border-radius: 15px;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+    color: #cbd5e1;
+  }
+  .panel .title {
+    font-size: 13.5px; font-weight: 700; color: #e2e8f0;
+    letter-spacing: .6px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .panel .title::before {
+    content: ''; width: 8px; height: 8px; border-radius: 50%;
+    background: #38bdf8; box-shadow: 0 0 10px #38bdf8;
+  }
+  .row { display: flex; gap: 8px; margin-bottom: 8px; }
+  button {
+    flex: 1; padding: 8px 4px; font-size: 12.5px; border-radius: 9px;
+    cursor: pointer; font-family: inherit; font-weight: 500;
+    background: rgba(30, 41, 59, 0.9); color: #cbd5e1;
+    border: 1px solid rgba(71, 85, 105, 0.8);
+    transition: all .15s ease;
+  }
+  button:hover { background: #334155; color: #e2e8f0; border-color: #38bdf8; }
+  button:active { transform: scale(0.97); }
+  button.active {
+    background: linear-gradient(180deg, #0ea5e9, #0284c7);
+    color: #fff; border-color: #7dd3fc;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.45);
+  }
+  .stats {
+    font-size: 11.5px; color: #64748b; margin-top: 10px;
+    padding-top: 10px; border-top: 1px solid rgba(71, 85, 105, 0.35);
+    display: flex; justify-content: space-between;
+  }
+  .stats b { color: #7dd3fc; font-weight: 600; }
+
+  .edge-input {
+    position: fixed; display: none; z-index: 20;
+    transform: translate(-50%, -50%);
+    width: 170px; padding: 7px 12px;
+    font-size: 13px; font-family: inherit; text-align: center;
+    color: #e2e8f0; background: rgba(15, 23, 42, 0.98);
+    border: 1.5px solid #38bdf8; border-radius: 9px; outline: none;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15), 0 10px 30px rgba(0, 0, 0, 0.6);
+  }
+  .edge-input::placeholder { color: #475569; }
+
+  .hint {
+    position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 10; font-size: 11.5px; color: #64748b;
+    background: rgba(15, 23, 42, 0.75);
+    padding: 7px 16px; border-radius: 999px;
+    border: 1px solid rgba(71, 85, 105, 0.35);
+    white-space: nowrap; backdrop-filter: blur(8px);
+  }
+  @media (max-width: 780px) {
+    .hint { display: none; }
+    .panel { width: 178px; padding: 11px; transform: scale(.92); transform-origin: top left; }
+  }
+
+  #toast {
+    position: fixed; top: 22px; left: 50%; transform: translate(-50%, -14px);
+    z-index: 30; padding: 9px 20px; border-radius: 10px;
+    background: rgba(14, 165, 233, 0.95); color: #fff;
+    font-size: 13px; font-weight: 600; pointer-events: none;
+    opacity: 0; transition: all .25s ease;
+    box-shadow: 0 10px 30px rgba(14, 165, 233, 0.35);
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  #status {
+    position: fixed; top: 16px; right: 16px; z-index: 10;
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(71, 85, 105, 0.5);
+    color: #94a3b8;
+    backdrop-filter: blur(8px);
+  }
+  #status.online  { color: #7dd3fc; border-color: rgba(56,189,248,0.6); }
+  #status.offline { color: #f87171; border-color: rgba(248,113,113,0.6); }
+</style>
+</head>
+<body>
+
+<canvas id="cv"></canvas>
+
+<div class="panel">
+  <div class="title">节点关系图</div>
+  <div class="row">
+    <button id="btnDrag" class="active">✋ 拖动</button>
+    <button id="btnConnect">🔗 连线</button>
+  </div>
+  <div class="row">
+    <button id="btnClear">清除连线</button>
+    <button id="btnFit">适应视图</button>
+  </div>
+  <div class="row">
+    <button id="btnReset">重置为47节点</button>
+  </div>
+  <div class="stats">
+    <span>节点 <b id="stNodes">0</b></span>
+    <span>连线 <b id="stEdges">0</b></span>
+  </div>
+</div>
+
+<div id="status">连接中…</div>
+
+<input id="edgeInput" class="edge-input" type="text" placeholder="输入关系…" maxlength="24">
+<div id="toast"></div>
+
+<div class="hint">
+  点击连线中点即可写关系 · 拖动节点 · 滚轮缩放 · 空白拖拽平移 · 【连线】模式点两个节点 · Delete 删除
+</div>
+
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  // ====================================================================
+  // ===== 配置区：只改下面两个值 =====
+  // ====================================================================
+  const SUPABASE_URL      = 'https://jokhrqkzktskdthpnspw.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impva2hycWt6a3Rza2R0aHBuc3B3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjQwMjQsImV4cCI6MjEwNDg0MDAyNH0.T84OrVHY_FXA-r-6kZB3GAZdaiZfm1lG4yUE2ZWSYN4';   // ← 替换成真实的 anon key
+
+  const ROOM_ID = new URLSearchParams(location.search).get('room') || 'default';
+
+  let supabase = null;
+  let cloudReady = false;
+  let channel = null;
+  let reconnectTimer = null;
+
+  // ====================================================================
+  // ===== Supabase 初始化 =====
+  // ====================================================================
+  try {
+    if (window.supabase && window.supabase.createClient) {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      cloudReady = true;
+      console.log('[Supabase] 客户端已初始化，ROOM_ID =', ROOM_ID);
+    } else {
+      console.warn('[Supabase] SDK 未加载，使用本地模式');
+    }
+  } catch (err) {
+    console.warn('[Supabase] 初始化失败：', err);
+  }
+
+  // ====================================================================
+  // ===== 画布基础变量 =====
+  // ====================================================================
+  const cv        = document.getElementById('cv');
+  const ctx       = cv.getContext('2d');
+  const edgeInput = document.getElementById('edgeInput');
+  const stNodes   = document.getElementById('stNodes');
+  const stEdges   = document.getElementById('stEdges');
+  const toastEl   = document.getElementById('toast');
+  const statusEl  = document.getElementById('status');
+
+  const FONT = 'system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif';
+  const NODE_COUNT = 47;
+  const R = 26;
+
+  let W = 0, H = 0, DPR = 1;
+
+  let nodes = [];
+  let edges = [];
+  let nextEdgeId = 1;
+
+  const view = { x: 0, y: 0, scale: 1 };
+
+  let mode = 'drag';
+  let dragNode = null, dragOff = { x: 0, y: 0 };
+  let panning = false, panStart = { x: 0, y: 0 };
+  let connectFrom = null;
+  let mouseWorld = { x: 0, y: 0 };
+  let hoverNode = null, hoverEdge = null;
+  let selected = null;
+  let editingEdge = null;
+
+  // 拖动节流用
+  const pushTimers = new Map();
+
+  // ====================================================================
+  // ===== 工具函数 =====
+  // ====================================================================
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const getNode = id => nodes.find(n => String(n.id) === String(id));
+  const toWorld  = (sx, sy) => ({ x: (sx - view.x) / view.scale, y: (sy - view.y) / view.scale });
+  const toScreen = (wx, wy) => ({ x: wx * view.scale + view.x, y: wy * view.scale + view.y });
+
+  function distToSeg(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const l2 = dx * dx + dy * dy;
+    if (l2 === 0) return Math.hypot(px - x1, py - y1);
+    const t = clamp(((px - x1) * dx + (py - y1) * dy) / l2, 0, 1);
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('show'), 1500);
+  }
+
+  function setStatus(text, cls) {
+    statusEl.textContent = text;
+    statusEl.className = cls || '';
+  }
+
+  // ====================================================================
+  // ===== 本地节点初始化 =====
+  // ====================================================================
+  function makeLocalNodes() {
+    const cols = 8, gap = 130;
+    nodes = [];
+    for (let i = 0; i < NODE_COUNT; i++) {
+      const c = i % cols, r = Math.floor(i / cols);
+      nodes.push({
+        id: String(i + 1),
+        x: c * gap,
+        y: r * gap,
+        label: String(i + 1),
+        version: 1
+      });
+    }
+    edges = [];
+    nextEdgeId = 1;
+    selected = null;
+    connectFrom = null;
+    editingEdge = null;
+  }
+
+  // ====================================================================
+  // ===== 视图自适应 =====
+  // ====================================================================
+  function fitView() {
+    if (!nodes.length) return;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      minX = Math.min(minX, n.x - R); maxX = Math.max(maxX, n.x + R);
+      minY = Math.min(minY, n.y - R); maxY = Math.max(maxY, n.y + R);
+    }
+    const leftInset = W > 780 ? 250 : 0;
+    const pad = 60;
+    const availW = Math.max(120, W - leftInset - pad * 2);
+    const availH = Math.max(120, H - pad * 2);
+
+    view.scale = clamp(Math.min(availW / (maxX - minX), availH / (maxY - minY)), 0.12, 1.25);
+
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    view.x = leftInset + availW / 2 + pad - cx * view.scale;
+    view.y = H / 2 - cy * view.scale;
+  }
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width  = Math.round(W * DPR);
+    cv.height = Math.round(H * DPR);
+    render();
+  }
+
+  // ====================================================================
+  // ===== 命中检测 =====
+  // ====================================================================
+  function nodeAt(wx, wy) {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      if (Math.hypot(n.x - wx, n.y - wy) <= R + 4) return n;
+    }
+    return null;
+  }
+
+  function labelAt(wx, wy) {
+    for (let i = edges.length - 1; i >= 0; i--) {
+      const r = edges[i]._rect;
+      if (!r) continue;
+      if (wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h) return edges[i];
+    }
+    return null;
+  }
+
+  function edgeAt(wx, wy) {
+    const tol = 10 / view.scale;
+    for (let i = edges.length - 1; i >= 0; i--) {
+      const e = edges[i];
+      const a = getNode(e.a), b = getNode(e.b);
+      if (!a || !b) continue;
+      if (distToSeg(wx, wy, a.x, a.y, b.x, b.y) <= tol) return e;
+    }
+    return null;
+  }
+
+  // ====================================================================
+  // ===== 数据操作：本地 + 云端 =====
+  // ====================================================================
+
+  /** 拖动节点：节流写回 + 乐观锁 */
+  function throttledUpdateNode(node) {
+    if (!cloudReady) return;
+    clearTimeout(pushTimers.get(node.id));
+    pushTimers.set(node.id, setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('nodes')
+          .update({ x: node.x, y: node.y })
+          .eq('id', node.id)
+          .eq('version', node.version)
+          .select()
+          .maybeSingle();
+
+        if (error) {
+          console.warn('更新节点失败：', error.message);
+          return;
+        }
+        if (!data) {
+          // 版本不匹配 = 有人先改了，拉取最新
+          console.warn('节点', node.id, '版本冲突，拉取最新');
+          await refreshNode(node.id);
+          return;
+        }
+        node.version = data.version;
+      } catch (err) {
+        console.warn('更新节点异常：', err);
+      }
+    }, 120));
+  }
+
+  async function refreshNode(id) {
+    if (!cloudReady) return;
+    const { data } = await supabase
+      .from('nodes').select('*').eq('id', id).maybeSingle();
+    if (data) {
+      const n = getNode(id);
+      if (n) {
+        n.x = Number(data.x);
+        n.y = Number(data.y);
+        n.label = data.label;
+        n.version = data.version;
+        render();
+      }
+    }
+  }
+
+  /** 创建节点 */
+  async function createNodeRemote(node) {
+    if (!cloudReady) return;
+    const { data, error } = await supabase
+      .from('nodes')
+      .insert({
+        id: node.id,
+        room_id: ROOM_ID,
+        x: node.x,
+        y: node.y,
+        label: node.label
+      })
+      .select()
+      .maybeSingle();
+    if (error) { console.warn('创建节点失败：', error.message); return; }
+    if (data) node.version = data.version;
+  }
+
+  /** 删除节点（连带删除关联边） */
+  async function deleteNodeRemote(id) {
+    if (!cloudReady) return;
+    await supabase.from('edges').delete().or(`a.eq.${id},b.eq.${id}`).eq('room_id', ROOM_ID);
+    await supabase.from('nodes').delete().eq('id', id).eq('room_id', ROOM_ID);
+  }
+
+  /** 创建边 */
+  async function createEdgeRemote(edge) {
+    if (!cloudReady) return;
+    const { data, error } = await supabase
+      .from('edges')
+      .insert({
+        id: edge.id,
+        room_id: ROOM_ID,
+        a: edge.a,
+        b: edge.b,
+        label: edge.label || ''
+      })
+      .select()
+      .maybeSingle();
+    if (error) { console.warn('创建边失败：', error.message); return; }
+    if (data) edge.version = data.version;
+  }
+
+  /** 更新边标签（乐观锁） */
+  async function updateEdgeLabelRemote(edge) {
+    if (!cloudReady) return;
+    try {
+      const { data, error } = await supabase
+        .from('edges')
+        .update({ label: edge.label })
+        .eq('id', edge.id)
+        .eq('version', edge.version)
+        .select()
+        .maybeSingle();
+
+      if (error) { console.warn('更新边失败：', error.message); return; }
+      if (!data) {
+        toast('这条连线已被其他人修改');
+        await refreshEdge(edge.id);
+      } else {
+        edge.version = data.version;
+      }
+    } catch (err) {
+      console.warn('更新边异常：', err);
+    }
+  }
+
+  async function refreshEdge(id) {
+    if (!cloudReady) return;
+    const { data } = await supabase
+      .from('edges').select('*').eq('id', id).maybeSingle();
+    if (data) {
+      const e = edges.find(x => String(x.id) === String(id));
+      if (e) {
+        e.label = data.label || '';
+        e.version = data.version;
+        render();
+      }
+    }
+  }
+
+  /** 删除边 */
+  async function deleteEdgeRemote(id) {
+    if (!cloudReady) return;
+    await supabase.from('edges').delete().eq('id', id).eq('room_id', ROOM_ID);
+  }
+
+  // ====================================================================
+  // ===== 画布渲染 =====
+  // ====================================================================
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function drawDots() {
+    let step = 40;
+    while (step * view.scale < 30) step *= 2;
+    const tl = toWorld(0, 0), br = toWorld(W, H);
+    const x0 = Math.floor(tl.x / step) * step;
+    const y0 = Math.floor(tl.y / step) * step;
+    const r = Math.max(0.7, 1.3 / view.scale);
+    ctx.fillStyle = 'rgba(56,189,248,0.09)';
+    for (let x = x0; x < br.x + step; x += step) {
+      for (let y = y0; y < br.y + step; y += step) {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  function drawNode(n) {
+    const isHover = hoverNode === n;
+    const isSel   = selected && selected.type === 'node' && String(selected.id) === String(n.id);
+    const isFrom  = connectFrom === n.id;
+    const active  = isHover || isSel || isFrom;
+
+    ctx.save();
+    if (active) {
+      ctx.shadowColor = isFrom ? 'rgba(245,158,11,0.85)' : 'rgba(56,189,248,0.85)';
+      ctx.shadowBlur = 18;
+    }
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, R, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(n.x - R * 0.35, n.y - R * 0.42, 2, n.x, n.y, R);
+    if (isFrom)       { g.addColorStop(0, '#7c4a09'); g.addColorStop(1, '#2a1a04'); }
+    else if (isSel)   { g.addColorStop(0, '#1d4ed8'); g.addColorStop(1, '#16265e'); }
+    else if (isHover) { g.addColorStop(0, '#1e40af'); g.addColorStop(1, '#132a4d'); }
+    else              { g.addColorStop(0, '#1b2b47'); g.addColorStop(1, '#111b2e'); }
+    ctx.fillStyle = g;
+    ctx.fill();
+    ctx.restore();
+
+    ctx.beginPath();
+    ctx.arc(n.x, n.y, R, 0, Math.PI * 2);
+    ctx.lineWidth = active ? 3 : 2;
+    ctx.strokeStyle = isFrom ? '#f59e0b' : isSel ? '#facc15' : isHover ? '#7dd3fc' : '#2f7fb8';
+    ctx.stroke();
+
+    ctx.fillStyle = active ? '#ffffff' : '#c7dcf5';
+    ctx.font = `700 16px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(n.label), n.x, n.y + 1);
+  }
+
+  function drawEdgeLabel(e) {
+    const a = getNode(e.a), b = getNode(e.b);
+    if (!a || !b) return;
+
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const isSel = selected && selected.type === 'edge' && String(selected.id) === String(e.id);
+    const isHov = hoverEdge === e;
+    const active = isSel || isHov;
+    const hasLabel = !!(e.label && e.label.length);
+
+    if (editingEdge === e) {
+      e._rect = { x: mx - 18, y: my - 18, w: 36, h: 36 };
+      return;
+    }
+
+    if (!hasLabel && !active) {
+      ctx.beginPath();
+      ctx.arc(mx, my, 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(56,189,248,0.28)';
+      ctx.fill();
+      e._rect = { x: mx - 16, y: my - 16, w: 32, h: 32 };
+      return;
+    }
+
+    const text = hasLabel ? e.label : '+ 关系';
+    ctx.font = `600 14px ${FONT}`;
+    const tw = ctx.measureText(text).width;
+    const padX = 9, padY = 6;
+    const bw = tw + padX * 2;
+    const bh = 16 + padY * 2;
+    const x = mx - bw / 2, y = my - bh / 2;
+
+    e._rect = { x, y, w: bw, h: bh };
+
+    roundRect(x, y, bw, bh, 9);
+    if (hasLabel) {
+      ctx.fillStyle = 'rgba(11,16,32,0.97)';
+    } else {
+      ctx.fillStyle = active ? 'rgba(56,189,248,0.20)' : 'rgba(15,23,42,0.7)';
+    }
+    ctx.fill();
+
+    ctx.lineWidth = active ? 1.8 : 1.2;
+    ctx.strokeStyle = isSel ? '#facc15' : isHov ? '#7dd3fc' : hasLabel ? '#2f7fb8' : 'rgba(71,85,105,0.8)';
+    ctx.stroke();
+
+    ctx.fillStyle = hasLabel ? '#e2e8f0' : (active ? '#7dd3fc' : '#64748b');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, mx, my + 0.5);
+  }
+
+  function render() {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = '#0b1020';
+    ctx.fillRect(0, 0, W, H);
+
+    drawDots();
+
+    ctx.save();
+    ctx.translate(view.x, view.y);
+    ctx.scale(view.scale, view.scale);
+
+    for (const e of edges) {
+      const a = getNode(e.a), b = getNode(e.b);
+      if (!a || !b) continue;
+      const isSel = selected && selected.type === 'edge' && String(selected.id) === String(e.id);
+      const isHov = hoverEdge === e;
+      ctx.strokeStyle = isSel ? '#facc15' : isHov ? '#7dd3fc' : '#3b4b63';
+      ctx.lineWidth = (isSel || isHov) ? 3.5 : 2.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+
+    if (connectFrom !== null) {
+      const a = getNode(connectFrom);
+      if (a) {
+        ctx.save();
+        ctx.setLineDash([7, 7]);
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(mouseWorld.x, mouseWorld.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    for (const n of nodes) drawNode(n);
+    for (const e of edges) drawEdgeLabel(e);
+
+    ctx.restore();
+
+    stNodes.textContent = nodes.length;
+    stEdges.textContent = edges.length;
+  }
+
+  // ====================================================================
+  // ===== 边编辑输入框 =====
+  // ====================================================================
+  function openEdgeEditor(edge) {
+    const a = getNode(edge.a), b = getNode(edge.b);
+    if (!a || !b) return;
+    const p = toScreen((a.x + b.x) / 2, (a.y + b.y) / 2);
+
+    editingEdge = edge;
+    edgeInput.style.display = 'block';
+    edgeInput.style.left = p.x + 'px';
+    edgeInput.style.top  = p.y + 'px';
+    edgeInput.value = edge.label || '';
+
+    render();
+    edgeInput.focus();
+    edgeInput.select();
+  }
+
+  function commitEdgeLabel() {
+    if (!editingEdge) return;
+    const e = editingEdge;
+    editingEdge = null;
+    e.label = edgeInput.value.trim();
+    edgeInput.style.display = 'none';
+    edgeInput.blur();
+    render();
+    updateEdgeLabelRemote(e);
+  }
+
+  function cancelEdgeEditor() {
+    if (!editingEdge) return;
+    editingEdge = null;
+    edgeInput.style.display = 'none';
+    edgeInput.blur();
+    render();
+  }
+
+  edgeInput.addEventListener('keydown', ev => {
+    ev.stopPropagation();
+    if (ev.key === 'Enter')  { ev.preventDefault(); commitEdgeLabel(); }
+    if (ev.key === 'Escape') { ev.preventDefault(); cancelEdgeEditor(); }
+  });
+  edgeInput.addEventListener('blur', commitEdgeLabel);
+
+  // ====================================================================
+  // ===== 指针交互 =====
+  // ====================================================================
+  cv.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+
+    if (editingEdge) commitEdgeLabel();
+
+    const p = toWorld(e.offsetX, e.offsetY);
+
+    if (mode === 'connect') {
+      const n = nodeAt(p.x, p.y);
+      if (!n) { connectFrom = null; render(); return; }
+
+      if (connectFrom === null) {
+        connectFrom = n.id;
+      } else if (connectFrom === n.id) {
+        connectFrom = null;
+      } else {
+        const aId = connectFrom, bId = n.id;
+
+        const dup = edges.some(x =>
+          (String(x.a) === String(aId) && String(x.b) === String(bId)) ||
+          (String(x.a) === String(bId) && String(x.b) === String(aId))
+        );
+        if (dup) {
+          toast('这两个节点已经连过了');
+          connectFrom = null;
+          render();
+          return;
+        }
+
+        const newEdge = {
+          id: 'e' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+          a: aId, b: bId, label: '', version: 1
+        };
+        edges.push(newEdge);
+        connectFrom = null;
+        selected = { type: 'edge', id: newEdge.id };
+        render();
+        openEdgeEditor(newEdge);
+
+        createEdgeRemote(newEdge);
+        return;
+      }
+      render();
+      return;
+    }
+
+    const n = nodeAt(p.x, p.y);
+    if (n) {
+      selected = { type: 'node', id: n.id };
+      dragNode = n;
+      dragOff = { x: p.x - n.x, y: p.y - n.y };
+      nodes.splice(nodes.indexOf(n), 1);
+      nodes.push(n);
+      cv.style.cursor = 'grabbing';
+      render();
+      return;
+    }
+
+    const lbl = labelAt(p.x, p.y);
+    if (lbl) {
+      selected = { type: 'edge', id: lbl.id };
+      render();
+      openEdgeEditor(lbl);
+      return;
+    }
+
+    const ed = edgeAt(p.x, p.y);
+    if (ed) {
+      selected = { type: 'edge', id: ed.id };
+      render();
+      openEdgeEditor(ed);
+      return;
+    }
+
+    selected = null;
+    panning = true;
+    panStart = { x: e.offsetX - view.x, y: e.offsetY - view.y };
+    cv.style.cursor = 'grabbing';
+    render();
+  });
+
+  cv.addEventListener('pointermove', e => {
+    const sx = e.offsetX, sy = e.offsetY;
+    mouseWorld = toWorld(sx, sy);
+
+    if (dragNode) {
+      dragNode.x = mouseWorld.x - dragOff.x;
+      dragNode.y = mouseWorld.y - dragOff.y;
+      throttledUpdateNode(dragNode);
+      render();
+      return;
+    }
+
+    if (panning) {
+      view.x = sx - panStart.x;
+      view.y = sy - panStart.y;
+      render();
+      return;
+    }
+
+    const n = nodeAt(mouseWorld.x, mouseWorld.y);
+    let ed = null, onLabel = false;
+    if (!n) {
+      const lbl = labelAt(mouseWorld.x, mouseWorld.y);
+      if (lbl) { ed = lbl; onLabel = true; }
+      else ed = edgeAt(mouseWorld.x, mouseWorld.y);
+    }
+
+    const changed = (n !== hoverNode) || (ed !== hoverEdge);
+    if (changed) {
+      hoverNode = n;
+      hoverEdge = ed;
+      cv.style.cursor =
+        mode === 'connect' ? 'crosshair' :
+        n        ? 'grab' :
+        onLabel  ? 'text' :
+        ed       ? 'pointer' : 'default';
+    }
+    if (changed || connectFrom !== null) render();
+  });
+
+  function endPointer() {
+    dragNode = null;
+    panning = false;
+    cv.style.cursor = mode === 'connect' ? 'crosshair' : 'default';
+  }
+  cv.addEventListener('pointerup', endPointer);
+  cv.addEventListener('pointercancel', endPointer);
+
+  cv.addEventListener('pointerleave', () => {
+    if (!dragNode && !panning) {
+      hoverNode = null; hoverEdge = null;
+      render();
+    }
+  });
+
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    if (editingEdge) commitEdgeLabel();
+
+    const sx = e.offsetX, sy = e.offsetY;
+    const factor = Math.exp(-e.deltaY * 0.0015);
+    const newScale = clamp(view.scale * factor, 0.12, 4);
+    const k = newScale / view.scale;
+    view.x = sx - (sx - view.x) * k;
+    view.y = sy - (sy - view.y) * k;
+    view.scale = newScale;
+    render();
+  }, { passive: false });
+
+  cv.addEventListener('dblclick', e => {
+    const p = toWorld(e.offsetX, e.offsetY);
+    const n = nodeAt(p.x, p.y);
+    if (n) {
+      const v = prompt('修改节点名称：', n.label);
+      if (v !== null && v.trim()) {
+        n.label = v.trim().slice(0, 6);
+        render();
+        if (cloudReady) {
+          supabase.from('nodes')
+            .update({ label: n.label })
+            .eq('id', n.id)
+            .eq('version', n.version)
+            .select()
+            .maybeSingle()
+            .then(({ data }) => { if (data) n.version = data.version; });
+        }
+      }
+    }
+  });
+
+  window.addEventListener('keydown', e => {
+    if (document.activeElement === edgeInput) return;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (selected) {
+        e.preventDefault();
+        if (selected.type === 'node') {
+          const id = selected.id;
+          nodes = nodes.filter(n => String(n.id) !== String(id));
+          edges = edges.filter(x => String(x.a) !== String(id) && String(x.b) !== String(id));
+          deleteNodeRemote(id);
+        } else {
+          const id = selected.id;
+          edges = edges.filter(x => String(x.id) !== String(id));
+          deleteEdgeRemote(id);
+        }
+        selected = null;
+        render();
+      }
+    }
+    if (e.key === 'Escape') {
+      connectFrom = null;
+      selected = null;
+      if (editingEdge) cancelEdgeEditor();
+      render();
+    }
+    if (e.key === '1') setMode('drag');
+    if (e.key === '2') setMode('connect');
+  });
+
+  // ====================================================================
+  // ===== 工具栏 =====
+  // ====================================================================
+  const btnDrag    = document.getElementById('btnDrag');
+  const btnConnect = document.getElementById('btnConnect');
+
+  function setMode(m) {
+    mode = m;
+    connectFrom = null;
+    if (editingEdge) commitEdgeLabel();
+    btnDrag.classList.toggle('active', m === 'drag');
+    btnConnect.classList.toggle('active', m === 'connect');
+    cv.style.cursor = m === 'connect' ? 'crosshair' : 'default';
+    render();
+  }
+
+  btnDrag.onclick    = () => setMode('drag');
+  btnConnect.onclick = () => setMode('connect');
+
+  document.getElementById('btnClear').onclick = async () => {
+    if (!edges.length) return;
+    if (!confirm('确定清除所有连线吗？')) return;
+    if (editingEdge) cancelEdgeEditor();
+    edges = [];
+    selected = null;
+    connectFrom = null;
+    render();
+    if (cloudReady) {
+      await supabase.from('edges').delete().eq('room_id', ROOM_ID);
+    }
+    toast('已清除所有连线');
+  };
+
+  document.getElementById('btnFit').onclick = () => {
+    if (editingEdge) commitEdgeLabel();
+    fitView(); render();
+  };
+
+  document.getElementById('btnReset').onclick = async () => {
+    if (!confirm('重置为 47 个初始节点？当前云端数据也会被清空。')) return;
+    if (cloudReady) {
+      await supabase.from('edges').delete().eq('room_id', ROOM_ID);
+      await supabase.from('nodes').delete().eq('room_id', ROOM_ID);
+    }
+    makeLocalNodes();
+    render();
+    if (cloudReady) {
+      const nodeRows = nodes.map(n => ({
+        id: n.id, room_id: ROOM_ID, x: n.x, y: n.y, label: n.label
+      }));
+      await supabase.from('nodes').insert(nodeRows);
+      toast('已重置并同步到云端');
+    } else {
+      toast('已重置（本地模式）');
+    }
+    fitView(); render();
+  };
+
+  // ====================================================================
+  // ===== 加载数据 + 实时订阅 =====
+  // ====================================================================
+  async function loadInitialData() {
+  const [nodesRes, edgesRes] = await Promise.all([
+    supabase.from('nodes').select('*').eq('room_id', ROOM_ID),
+    supabase.from('edges').select('*').eq('room_id', ROOM_ID)
+  ]);
+
+  if (nodesRes.error) throw nodesRes.error;
+  if (edgesRes.error) throw edgesRes.error;
+
+  nodes = (nodesRes.data || []).map(n => ({
+    id: String(n.id),
+    x: Number(n.x),
+    y: Number(n.y),
+    label: n.label,
+    version: n.version
+  }));
+
+  edges = (edgesRes.data || []).map(e => ({
+    id: String(e.id),
+    a: String(e.a),
+    b: String(e.b),
+    label: e.label || '',
+    version: e.version
+  }));
+
+  // 云端没有节点 → 用本地 47 节点初始化，并写入云端
+  if (nodes.length === 0) {
+    console.log('[Supabase] 云端为空，准备初始化 47 节点到 room =', ROOM_ID);
+    makeLocalNodes();
+
+    const nodeRows = nodes.map(n => ({
+      id: n.id,
+      room_id: ROOM_ID,
+      x: n.x,
+      y: n.y,
+      label: n.label
+    }));
+
+    const { data, error } = await supabase
+      .from('nodes')
+      .insert(nodeRows)
+      .select();
+
+    if (error) {
+      console.error('❌ 初始化节点写入失败：', error);
+      console.error('   code:', error.code);
+      console.error('   message:', error.message);
+      console.error('   details:', error.details);
+      console.error('   hint:', error.hint);
+    } else {
+      console.log('✅ 已写入', data.length, '个节点到', ROOM_ID);
+    }
+  } else {
+    console.log('[Supabase] 从云端加载了', nodes.length, '个节点，', edges.length, '条边');
+  }
+}
+
+  function subscribeRealtime() {
+    if (!cloudReady) return;
+
+    if (channel) {
+      supabase.removeChannel(channel);
+      channel = null;
+    }
+
+    channel = supabase
+      .channel('room-' + ROOM_ID, {
+        config: {
+          heartbeatCallback: (status) => {
+            if (status === 'disconnected' || status === 'timeout') {
+              setStatus('连接异常，重连中…', 'offline');
+              scheduleReconnect();
+            }
+          }
+        }
+      })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'nodes', filter: `room_id=eq.${ROOM_ID}` },
+        (payload) => {
+          const { eventType, new: row, old: oldRow } = payload;
+          if (eventType === 'INSERT') {
+            if (!getNode(row.id)) {
+              nodes.push({
+                id: String(row.id), x: Number(row.x), y: Number(row.y),
+                label: row.label, version: row.version
+              });
+            }
+          } else if (eventType === 'UPDATE') {
+            const n = getNode(row.id);
+            if (n) {
+              if (dragNode && String(dragNode.id) === String(row.id)) return;
+              n.x = Number(row.x);
+              n.y = Number(row.y);
+              n.label = row.label;
+              n.version = row.version;
+            }
+          } else if (eventType === 'DELETE') {
+            nodes = nodes.filter(n => String(n.id) !== String(oldRow.id));
+          }
+          render();
+        })
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'edges', filter: `room_id=eq.${ROOM_ID}` },
+        (payload) => {
+          const { eventType, new: row, old: oldRow } = payload;
+          if (eventType === 'INSERT') {
+            if (!edges.find(x => String(x.id) === String(row.id))) {
+              edges.push({
+                id: String(row.id), a: String(row.a), b: String(row.b),
+                label: row.label || '', version: row.version
+              });
+            }
+          } else if (eventType === 'UPDATE') {
+            const e = edges.find(x => String(x.id) === String(row.id));
+            if (e) {
+              e.label = row.label || '';
+              e.version = row.version;
+            }
+          } else if (eventType === 'DELETE') {
+            edges = edges.filter(x => String(x.id) !== String(oldRow.id));
+          }
+          render();
+        })
+      .subscribe((status) => {
+        console.log('[Realtime] 状态：', status);
+        if (status === 'SUBSCRIBED') {
+          setStatus('已连接 · 多人协作中', 'online');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          setStatus('连接异常，重连中…', 'offline');
+          scheduleReconnect();
+        }
+      });
+  }
+
+  function scheduleReconnect() {
+    if (!cloudReady) return;
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(async () => {
+      reconnectTimer = null;
+      try {
+        if (channel) await supabase.removeChannel(channel);
+        await loadInitialData();
+        subscribeRealtime();
+        render();
+        toast('已重新连接');
+      } catch (err) {
+        console.error('重连失败，5 秒后重试', err);
+        reconnectTimer = setTimeout(scheduleReconnect, 5000);
+      }
+    }, 2000);
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && cloudReady) {
+      if (!channel || channel.state !== 'joined') {
+        scheduleReconnect();
+      }
+    }
+  });
+
+  // ====================================================================
+  // ===== 启动 =====
+  // ====================================================================
+  async function init() {
+    resize();
+
+    if (cloudReady) {
+      try {
+        await loadInitialData();
+        console.log('[Supabase] 已加载，节点 =', nodes.length, '边 =', edges.length);
+        fitView();
+        render();
+        subscribeRealtime();
+      } catch (err) {
+        console.error('[Supabase] 加载失败，回退本地模式：', err.message || err);
+        cloudReady = false;
+        setStatus('本地模式（云端不可用）', 'offline');
+        makeLocalNodes();
+        fitView();
+        render();
+      }
+    } else {
+      setStatus('本地模式（未配置 Supabase）', 'offline');
+      makeLocalNodes();
+      fitView();
+      render();
+    }
+  }
+
+  init();
+
+  let lastW = W, lastH = H;
+  window.addEventListener('resize', () => {
+    resize();
+    if (Math.abs(W - lastW) > 120 || Math.abs(H - lastH) > 120) {
+      if (editingEdge) commitEdgeLabel();
+      fitView(); render();
+    }
+    lastW = W; lastH = H;
+  });
+
+})();
+</script>
+</body>
+</html>
