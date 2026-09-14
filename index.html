@@ -258,7 +258,7 @@
 </div>
 
 <div class="hint">
-  点击连线中点即可写关系 · 双击节点编辑标签 · 拖动节点 · 空白拖拽平移 · 【连线】模式点两个节点 · Delete 删除
+  点击连线任意位置即可写关系 · 双击节点编辑标签 · 拖动节点 · 空白拖拽平移 · 【连线】模式点两个节点 · Delete 删除
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -372,6 +372,15 @@
     statusEl.className = cls || '';
   }
 
+  // 统一的坐标计算：以 canvas 左上角为参照
+  function getCanvasPoint(e) {
+    const rect = cv.getBoundingClientRect();
+    return {
+      sx: e.clientX - rect.left,
+      sy: e.clientY - rect.top
+    };
+  }
+
   // ====================================================================
   // ===== 密码 / 解锁逻辑 =====
   // ====================================================================
@@ -385,7 +394,6 @@
       btnLock.classList.add('lock-on');
       readonlyBadge.classList.add('show');
     }
-    // 只有拖动和连线需要解锁
     ['btnDrag', 'btnConnect'].forEach(id => {
       const b = document.getElementById(id);
       if (b) b.disabled = !isUnlocked;
@@ -420,7 +428,7 @@
   }
 
   // ====================================================================
-  // ===== 缩放按钮 =====
+  // ===== 缩放 =====
   // ====================================================================
   function zoomBy(factor) {
     const leftInset = W > 780 ? 250 : 0;
@@ -512,7 +520,8 @@
   }
 
   function edgeAt(wx, wy) {
-    const tol = 10 / view.scale;
+    // 容差放大，桌面端更好点
+    const tol = 15 / view.scale;
     for (let i = edges.length - 1; i >= 0; i--) {
       const e = edges[i];
       const a = getNode(e.a), b = getNode(e.b);
@@ -854,8 +863,10 @@
     edgeInput.value = edge.label || '';
 
     render();
-    edgeInput.focus();
-    edgeInput.select();
+    setTimeout(() => {
+      edgeInput.focus();
+      edgeInput.select();
+    }, 20);
   }
 
   async function commitEdgeLabel() {
@@ -1034,12 +1045,36 @@
 
     if (editingEdge) commitEdgeLabel();
 
-    const p = toWorld(e.offsetX, e.offsetY);
+    const { sx, sy } = getCanvasPoint(e);
+    const p = toWorld(sx, sy);
 
+    // ---- 连线模式 ----
     if (mode === 'connect') {
       if (!isUnlocked) { toast('请先解锁编辑', true); return; }
+
       const n = nodeAt(p.x, p.y);
-      if (!n) { connectFrom = null; render(); return; }
+      if (!n) {
+        // 未点中节点时，检查是否点中了边 —— 方便在连线模式下也能改关系
+        const lbl = labelAt(p.x, p.y);
+        if (lbl) {
+          connectFrom = null;
+          selected = { type: 'edge', id: lbl.id };
+          render();
+          openEdgeEditor(lbl);
+          return;
+        }
+        const ed = edgeAt(p.x, p.y);
+        if (ed) {
+          connectFrom = null;
+          selected = { type: 'edge', id: ed.id };
+          render();
+          openEdgeEditor(ed);
+          return;
+        }
+        connectFrom = null;
+        render();
+        return;
+      }
 
       if (connectFrom === null) {
         connectFrom = n.id;
@@ -1080,6 +1115,9 @@
       return;
     }
 
+    // ---- 拖动模式 ----
+
+    // A. 点中节点
     const n = nodeAt(p.x, p.y);
     if (n) {
       if (!isUnlocked) {
@@ -1098,6 +1136,7 @@
       return;
     }
 
+    // B. 点中关系标签
     const lbl = labelAt(p.x, p.y);
     if (lbl) {
       selected = { type: 'edge', id: lbl.id };
@@ -1106,6 +1145,7 @@
       return;
     }
 
+    // C. 点中边
     const ed = edgeAt(p.x, p.y);
     if (ed) {
       selected = { type: 'edge', id: ed.id };
@@ -1114,15 +1154,16 @@
       return;
     }
 
+    // D. 空白处 —— 平移
     selected = null;
     panning = true;
-    panStart = { x: e.offsetX - view.x, y: e.offsetY - view.y };
+    panStart = { x: sx - view.x, y: sy - view.y };
     cv.style.cursor = 'grabbing';
     render();
   });
 
   cv.addEventListener('pointermove', e => {
-    const sx = e.offsetX, sy = e.offsetY;
+    const { sx, sy } = getCanvasPoint(e);
     mouseWorld = toWorld(sx, sy);
 
     if (dragNode) {
@@ -1200,7 +1241,7 @@
     e.preventDefault();
     if (editingEdge) commitEdgeLabel();
 
-    const sx = e.offsetX, sy = e.offsetY;
+    const { sx, sy } = getCanvasPoint(e);
     const factor = Math.exp(-e.deltaY * 0.0015);
     const newScale = clamp(view.scale * factor, 0.12, 4);
     const k = newScale / view.scale;
@@ -1212,7 +1253,8 @@
 
   cv.addEventListener('dblclick', e => {
     if (!requireUnlock()) return;
-    const p = toWorld(e.offsetX, e.offsetY);
+    const { sx, sy } = getCanvasPoint(e);
+    const p = toWorld(sx, sy);
     const n = nodeAt(p.x, p.y);
     if (n) openNodeEditor(n);
   });
