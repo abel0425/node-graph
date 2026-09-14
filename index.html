@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>节点关系图 · 多人协作</title>
 <style>
   * { box-sizing: border-box; }
@@ -65,20 +65,9 @@
   }
   .stats b { color: #7dd3fc; font-weight: 600; }
 
-  .edge-input {
-    position: fixed; display: none; z-index: 20;
-    transform: translate(-50%, -50%);
-    width: 170px; padding: 7px 12px;
-    font-size: 13px; font-family: inherit; text-align: center;
-    color: #e2e8f0; background: rgba(15, 23, 42, 0.98);
-    border: 1.5px solid #38bdf8; border-radius: 9px; outline: none;
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15), 0 10px 30px rgba(0, 0, 0, 0.6);
-  }
-  .edge-input::placeholder { color: #475569; }
-
   .hint {
     position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
-    z-index: 10; font-size: 11.5px; color: #64748b;
+    z-index: 9; font-size: 11.5px; color: #64748b;
     background: rgba(15, 23, 42, 0.75);
     padding: 7px 16px; border-radius: 999px;
     border: 1px solid rgba(71, 85, 105, 0.35);
@@ -125,6 +114,57 @@
     display: none;
   }
   #readonlyBadge.show { display: block; }
+
+  /* ===== 底部边编辑栏 ===== */
+  #edgeBar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    z-index: 25;
+    display: none;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(15, 23, 42, 0.98);
+    border-top: 1.5px solid #38bdf8;
+    gap: 8px;
+    align-items: center;
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.6);
+  }
+  #edgeBar.show { display: flex; }
+  #edgeBarInput {
+    flex: 1; min-width: 0;
+    padding: 10px 12px;
+    font-size: 15px;
+    font-family: inherit;
+    color: #e2e8f0;
+    background: rgba(2, 6, 23, 0.8);
+    border: 1px solid rgba(71, 85, 105, 0.7);
+    border-radius: 8px;
+    outline: none;
+  }
+  #edgeBarInput:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  }
+  #edgeBar button {
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  #edgeBarDel {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
+  }
+  #edgeBarDel:hover { background: rgba(239, 68, 68, 0.25) !important; }
+  #edgeBarSave {
+    background: linear-gradient(180deg, #0ea5e9, #0284c7) !important;
+    color: #fff !important;
+    border-color: #7dd3fc !important;
+  }
+  #edgeBarCancel {
+    background: rgba(30, 41, 59, 0.9) !important;
+    color: #cbd5e1 !important;
+  }
 
   #nodeEditor {
     position: fixed; z-index: 40;
@@ -237,7 +277,14 @@
 <div id="status">连接中…</div>
 <div id="readonlyBadge">👁 只读模式 · 点击左上角解锁才能编辑</div>
 
-<input id="edgeInput" class="edge-input" type="text" placeholder="输入关系…" maxlength="24">
+<!-- 底部边编辑栏 -->
+<div id="edgeBar">
+  <input id="edgeBarInput" type="text" placeholder="输入关系…" maxlength="24">
+  <button id="edgeBarDel">删除</button>
+  <button id="edgeBarSave">保存</button>
+  <button id="edgeBarCancel">取消</button>
+</div>
+
 <div id="toast"></div>
 
 <div id="nodeEditor">
@@ -258,7 +305,7 @@
 </div>
 
 <div class="hint">
-  点击连线任意位置即可写关系 · 双击节点编辑标签 · 拖动节点 · 空白拖拽平移 · 【连线】模式点两个节点 · Delete 删除
+  点击连线任意位置即可写关系 · 双击节点编辑标签 · 拖动节点 · 空白拖拽平移 · 【连线】模式点两个节点
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -302,13 +349,21 @@
   // ====================================================================
   const cv        = document.getElementById('cv');
   const ctx       = cv.getContext('2d');
-  const edgeInput = document.getElementById('edgeInput');
   const stNodes   = document.getElementById('stNodes');
   const stEdges   = document.getElementById('stEdges');
   const toastEl   = document.getElementById('toast');
   const statusEl  = document.getElementById('status');
   const readonlyBadge = document.getElementById('readonlyBadge');
   const btnLock   = document.getElementById('btnLock');
+
+  // 底部边编辑栏
+  const edgeBar        = document.getElementById('edgeBar');
+  const edgeBarInput   = document.getElementById('edgeBarInput');
+  const edgeBarDel     = document.getElementById('edgeBarDel');
+  const edgeBarSave    = document.getElementById('edgeBarSave');
+  const edgeBarCancel  = document.getElementById('edgeBarCancel');
+
+  // 节点编辑面板
   const nodeEditor = document.getElementById('nodeEditor');
   const neName    = document.getElementById('neName');
   const neTagsInput = document.getElementById('neTagsInput');
@@ -341,8 +396,6 @@
   let editingNode = null;
   let editingTags = [];
 
-  const pushTimers = new Map();
-
   // ====================================================================
   // ===== 工具函数 =====
   // ====================================================================
@@ -372,7 +425,6 @@
     statusEl.className = cls || '';
   }
 
-  // 统一的坐标计算：以 canvas 左上角为参照
   function getCanvasPoint(e) {
     const rect = cv.getBoundingClientRect();
     return {
@@ -382,7 +434,7 @@
   }
 
   // ====================================================================
-  // ===== 密码 / 解锁逻辑 =====
+  // ===== 密码 / 解锁 =====
   // ====================================================================
   function updateLockUI() {
     if (isUnlocked) {
@@ -393,6 +445,7 @@
       btnLock.textContent = '🔒 解锁编辑';
       btnLock.classList.add('lock-on');
       readonlyBadge.classList.add('show');
+      closeEdgeBar();
     }
     ['btnDrag', 'btnConnect'].forEach(id => {
       const b = document.getElementById(id);
@@ -520,7 +573,6 @@
   }
 
   function edgeAt(wx, wy) {
-    // 容差放大，桌面端更好点
     const tol = 15 / view.scale;
     for (let i = edges.length - 1; i >= 0; i--) {
       const e = edges[i];
@@ -540,10 +592,8 @@
       const { data, error } = await supabase
         .from('nodes')
         .update({ x: node.x, y: node.y })
-        .eq('id', node.id)
-        .eq('version', node.version)
-        .select()
-        .maybeSingle();
+        .eq('id', node.id).eq('version', node.version)
+        .select().maybeSingle();
       if (error) { console.warn('保存位置失败：', error.message); return; }
       if (!data) { await refreshNode(node.id); return; }
       node.version = data.version;
@@ -556,10 +606,8 @@
       const { data, error } = await supabase
         .from('nodes')
         .update({ label: node.label, tags: node.tags })
-        .eq('id', node.id)
-        .eq('version', node.version)
-        .select()
-        .maybeSingle();
+        .eq('id', node.id).eq('version', node.version)
+        .select().maybeSingle();
       if (error) { console.warn('保存节点失败：', error.message); toast('保存失败', true); return; }
       if (!data) { toast('该节点已被他人修改，已拉取最新', true); await refreshNode(node.id); return; }
       node.version = data.version;
@@ -569,13 +617,11 @@
 
   async function refreshNode(id) {
     if (!cloudReady) return;
-    const { data } = await supabase
-      .from('nodes').select('*').eq('id', id).maybeSingle();
+    const { data } = await supabase.from('nodes').select('*').eq('id', id).maybeSingle();
     if (data) {
       const n = getNode(id);
       if (n) {
-        n.x = Number(data.x);
-        n.y = Number(data.y);
+        n.x = Number(data.x); n.y = Number(data.y);
         n.label = data.label;
         n.tags = Array.isArray(data.tags) ? data.tags : [];
         n.version = data.version;
@@ -632,7 +678,7 @@
   }
 
   // ====================================================================
-  // ===== 画布渲染 =====
+  // ===== 渲染 =====
   // ====================================================================
   function roundRect(x, y, w, h, r) {
     ctx.beginPath();
@@ -756,13 +802,9 @@
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     const isSel = selected && selected.type === 'edge' && String(selected.id) === String(e.id);
     const isHov = hoverEdge === e;
-    const active = isSel || isHov;
+    const isEditing = editingEdge === e;
+    const active = isSel || isHov || isEditing;
     const hasLabel = !!(e.label && e.label.length);
-
-    if (editingEdge === e) {
-      e._rect = { x: mx - 18, y: my - 18, w: 36, h: 36 };
-      return;
-    }
 
     if (!hasLabel && !active) {
       ctx.beginPath();
@@ -788,8 +830,8 @@
     else ctx.fillStyle = active ? 'rgba(56,189,248,0.20)' : 'rgba(15,23,42,0.7)';
     ctx.fill();
 
-    ctx.lineWidth = active ? 1.8 : 1.2;
-    ctx.strokeStyle = isSel ? '#facc15' : isHov ? '#7dd3fc' : hasLabel ? '#2f7fb8' : 'rgba(71,85,105,0.8)';
+    ctx.lineWidth = isEditing ? 2.2 : active ? 1.8 : 1.2;
+    ctx.strokeStyle = isEditing ? '#facc15' : isSel ? '#facc15' : isHov ? '#7dd3fc' : hasLabel ? '#2f7fb8' : 'rgba(71,85,105,0.8)';
     ctx.stroke();
 
     ctx.fillStyle = hasLabel ? '#e2e8f0' : (active ? '#7dd3fc' : '#64748b');
@@ -814,8 +856,9 @@
       if (!a || !b) continue;
       const isSel = selected && selected.type === 'edge' && String(selected.id) === String(e.id);
       const isHov = hoverEdge === e;
-      ctx.strokeStyle = isSel ? '#facc15' : isHov ? '#7dd3fc' : '#3b4b63';
-      ctx.lineWidth = (isSel || isHov) ? 3.5 : 2.5;
+      const isEditing = editingEdge === e;
+      ctx.strokeStyle = isEditing ? '#facc15' : isSel ? '#facc15' : isHov ? '#7dd3fc' : '#3b4b63';
+      ctx.lineWidth = (isEditing || isSel || isHov) ? 3.5 : 2.5;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
@@ -848,67 +891,77 @@
   }
 
   // ====================================================================
-  // ===== 边编辑输入框 =====
+  // ===== 底部边编辑栏 =====
   // ====================================================================
   function openEdgeEditor(edge) {
     if (!requireUnlock()) return;
-    const a = getNode(edge.a), b = getNode(edge.b);
-    if (!a || !b) return;
-    const p = toScreen((a.x + b.x) / 2, (a.y + b.y) / 2);
 
     editingEdge = edge;
-    edgeInput.style.display = 'block';
-    edgeInput.style.left = p.x + 'px';
-    edgeInput.style.top  = p.y + 'px';
-    edgeInput.value = edge.label || '';
-
+    selected = { type: 'edge', id: edge.id };
+    edgeBarInput.value = edge.label || '';
+    edgeBar.classList.add('show');
     render();
-    setTimeout(() => {
-      edgeInput.focus();
-      edgeInput.select();
-    }, 20);
+    // 不主动 focus，避免手机键盘弹出导致视口变化
   }
 
-  async function commitEdgeLabel() {
+  function closeEdgeBar() {
+    editingEdge = null;
+    edgeBar.classList.remove('show');
+    edgeBarInput.value = '';
+    render();
+  }
+
+  async function saveEdgeEdit() {
     if (!editingEdge) return;
     const e = editingEdge;
-    editingEdge = null;
-    const newLabel = edgeInput.value.trim();
+    const newLabel = edgeBarInput.value.trim();
     const oldLabel = e.label || '';
 
-    edgeInput.style.display = 'none';
-    edgeInput.blur();
+    closeEdgeBar();
 
-    if (newLabel === oldLabel) { render(); return; }
+    if (newLabel === oldLabel) return;
 
     e.label = newLabel;
     render();
-
-    const save = confirm(`是否保存这条连线的关系文字？\n\n原内容：「${oldLabel || '（空）'}」\n新内容：「${newLabel || '（空）'}」`);
-    if (save) {
-      await updateEdgeLabelRemote(e);
-      toast('已保存');
-    } else {
-      e.label = oldLabel;
-      render();
-      toast('已取消保存', true);
-    }
+    await updateEdgeLabelRemote(e);
+    toast('已保存');
   }
 
-  function cancelEdgeEditor() {
+  async function deleteEditingEdge() {
     if (!editingEdge) return;
-    editingEdge = null;
-    edgeInput.style.display = 'none';
-    edgeInput.blur();
+    const e = editingEdge;
+    const a = getNode(e.a), b = getNode(e.b);
+    const ok = confirm(`是否删除连线？\n\n${a ? a.label : '?'} ←→ ${b ? b.label : '?'}`);
+    if (!ok) return;
+
+    const id = e.id;
+    closeEdgeBar();
+    edges = edges.filter(x => String(x.id) !== String(id));
+    if (selected && selected.type === 'edge' && String(selected.id) === String(id)) {
+      selected = null;
+    }
     render();
+    await deleteEdgeRemote(id);
+    toast('已删除连线');
   }
 
-  edgeInput.addEventListener('keydown', ev => {
-    ev.stopPropagation();
-    if (ev.key === 'Enter')  { ev.preventDefault(); commitEdgeLabel(); }
-    if (ev.key === 'Escape') { ev.preventDefault(); cancelEdgeEditor(); }
+  edgeBarSave.addEventListener('click', saveEdgeEdit);
+  edgeBarDel.addEventListener('click', deleteEditingEdge);
+  edgeBarCancel.addEventListener('click', () => {
+    closeEdgeBar();
+    toast('已取消', true);
   });
-  edgeInput.addEventListener('blur', commitEdgeLabel);
+
+  edgeBarInput.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      saveEdgeEdit();
+    }
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      closeEdgeBar();
+    }
+  });
 
   // ====================================================================
   // ===== 节点编辑面板 =====
@@ -1043,8 +1096,6 @@
   cv.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
 
-    if (editingEdge) commitEdgeLabel();
-
     const { sx, sy } = getCanvasPoint(e);
     const p = toWorld(sx, sy);
 
@@ -1054,20 +1105,15 @@
 
       const n = nodeAt(p.x, p.y);
       if (!n) {
-        // 未点中节点时，检查是否点中了边 —— 方便在连线模式下也能改关系
         const lbl = labelAt(p.x, p.y);
         if (lbl) {
           connectFrom = null;
-          selected = { type: 'edge', id: lbl.id };
-          render();
           openEdgeEditor(lbl);
           return;
         }
         const ed = edgeAt(p.x, p.y);
         if (ed) {
           connectFrom = null;
-          selected = { type: 'edge', id: ed.id };
-          render();
           openEdgeEditor(ed);
           return;
         }
@@ -1105,10 +1151,8 @@
           a: aId, b: bId, label: '', version: 1
         };
         edges.push(newEdge);
-        selected = { type: 'edge', id: newEdge.id };
-        render();
-        openEdgeEditor(newEdge);
         createEdgeRemote(newEdge);
+        openEdgeEditor(newEdge);
         return;
       }
       render();
@@ -1139,8 +1183,6 @@
     // B. 点中关系标签
     const lbl = labelAt(p.x, p.y);
     if (lbl) {
-      selected = { type: 'edge', id: lbl.id };
-      render();
       openEdgeEditor(lbl);
       return;
     }
@@ -1148,8 +1190,6 @@
     // C. 点中边
     const ed = edgeAt(p.x, p.y);
     if (ed) {
-      selected = { type: 'edge', id: ed.id };
-      render();
       openEdgeEditor(ed);
       return;
     }
@@ -1239,8 +1279,6 @@
 
   cv.addEventListener('wheel', e => {
     e.preventDefault();
-    if (editingEdge) commitEdgeLabel();
-
     const { sx, sy } = getCanvasPoint(e);
     const factor = Math.exp(-e.deltaY * 0.0015);
     const newScale = clamp(view.scale * factor, 0.12, 4);
@@ -1260,12 +1298,12 @@
   });
 
   window.addEventListener('keydown', async e => {
-    if (document.activeElement === edgeInput) return;
+    if (document.activeElement === edgeBarInput) return;
     if (document.activeElement === neName) return;
     if (document.activeElement === neTagsInput) return;
 
     if (e.key === 'Delete' || e.key === 'Backspace') {
-      if (selected && isUnlocked) {
+      if (selected && isUnlocked && !editingEdge) {
         e.preventDefault();
         if (selected.type === 'node') {
           const id = selected.id;
@@ -1296,7 +1334,7 @@
     if (e.key === 'Escape') {
       connectFrom = null;
       selected = null;
-      if (editingEdge) cancelEdgeEditor();
+      closeEdgeBar();
       if (nodeEditor.classList.contains('show')) closeNodeEditor();
       render();
     }
@@ -1314,7 +1352,7 @@
     if (!isUnlocked) m = 'drag';
     mode = m;
     connectFrom = null;
-    if (editingEdge) commitEdgeLabel();
+    closeEdgeBar();
     btnDrag.classList.toggle('active', m === 'drag');
     btnConnect.classList.toggle('active', m === 'connect');
     cv.style.cursor = m === 'connect' && isUnlocked ? 'crosshair' : 'default';
@@ -1325,7 +1363,7 @@
   btnConnect.onclick = () => { if (!requireUnlock()) return; setMode('connect'); };
 
   document.getElementById('btnFit').onclick = () => {
-    if (editingEdge) commitEdgeLabel();
+    closeEdgeBar();
     fitView(); render();
   };
 
@@ -1438,6 +1476,9 @@
             }
           } else if (eventType === 'DELETE') {
             edges = edges.filter(x => String(x.id) !== String(oldRow.id));
+            if (editingEdge && String(editingEdge.id) === String(oldRow.id)) {
+              closeEdgeBar();
+            }
           }
           render();
         })
@@ -1507,12 +1548,18 @@
 
   init();
 
+  // ====================================================================
+  // ===== 视口变化处理 =====
+  // ====================================================================
   let lastW = W, lastH = H;
   window.addEventListener('resize', () => {
     resize();
+    // 只有在没有编辑时才自动适应视图，避免手机键盘弹出时视图跳动
     if (Math.abs(W - lastW) > 120 || Math.abs(H - lastH) > 120) {
-      if (editingEdge) commitEdgeLabel();
-      fitView(); render();
+      if (!editingEdge && !nodeEditor.classList.contains('show')) {
+        fitView();
+      }
+      render();
     }
     lastW = W; lastH = H;
   });
